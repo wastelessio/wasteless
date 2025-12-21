@@ -1,5 +1,5 @@
 
-# Wasteles.io
+# Wasteless.io
 
 > **Stop monitoring cloud waste. Start eliminating it automatically.**
 
