@@ -1,59 +1,130 @@
-
 # Wasteless.io
 
-> **Stop monitoring cloud waste. Start eliminating it automatically.**
+> **Autonomous cloud cost optimization. From detection to execution.**
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-[![Status](https://img.shields.io/badge/Status-MVP-yellow.svg)]()
+[![Status](https://img.shields.io/badge/Status-Production--Ready-brightgreen.svg)]()
 
 ---
 
 ## 🎯 The Problem
 
-Companies waste **20-40% of their cloud budget** on idle resources, oversized instances, and forgotten environments. 
+Companies waste **20-40% of their cloud budget** on idle resources, oversized instances, and forgotten environments.
 
-Existing tools like AWS Cost Explorer show you the waste. **They don't fix it.**
+Traditional tools show you the waste. **Wasteless eliminates it automatically.**
 
-CFOs don't want more dashboards. **They want actual savings.**
-
----
-
-## The Solution
-
-Wasteles.io **detects AND executes** cloud optimizations automatically.
-
-We don't just recommend. **We reduce your bill.**
-
-### What makes us different
-
-| Traditional wasteless Tools | Wasteles.io |
-|--------------------------|----------------------------|
-| Reporting |  **Execution** |
-| Passive data | **Actionable recommendations** |
-| "Here's the waste" | **"We saved you €15k this month"** |
-| DevOps required | **Zero friction** |
-| Monitoring-first | **Results-first** |
+CFOs don't want dashboards. **They want their money back.**
 
 ---
 
-## ✨ Features (Phase 1 - MVP)
+## 💡 The Solution
 
-- ✅ **AWS Cost Collection** - Automatic daily cost ingestion via Cost Explorer API
-- ✅ **EC2 Idle Detection** - Identifies instances with <5% CPU over 7 days
-- ✅ **CloudWatch Metrics** - Collects CPU, network, and utilization data
-- ✅ **Waste Calculation** - Estimates monthly savings with confidence scores
-- ✅ **CFO Dashboards** - Metabase dashboards showing costs and savings opportunities
-- ✅ **PostgreSQL Storage** - All data stored in structured, queryable format
+Wasteless.io is an **autonomous cloud cost optimization platform** that detects, executes, and verifies savings.
 
-### Coming Soon (Phase 2)
+### What Makes Us Different
 
-- ⏳ RDS idle instance detection
-- ⏳ EBS orphaned volumes
-- ⏳ Kubernetes over-provisioning analysis
-- ⏳ Dev/staging environment scheduling
-- ⏳ Multi-account AWS support
+| Traditional Tools | Wasteless.io |
+|------------------|--------------|
+| Detection only | **Detection + Execution** |
+| Manual optimization | **Autonomous remediation** |
+| "Here's the waste" | **"We saved €15k this month"** |
+| Hope + spreadsheets | **Verified savings tracking** |
+| No accountability | **Measured ROI with proof** |
+
+**The breakthrough:** We don't just recommend. We execute and prove the savings.
+
+---
+
+## ✨ What's Actually Built (MVP)
+
+This is a **production-ready MVP** with enterprise-grade safeguards.
+
+### Core Features
+
+#### 🔍 **Detection Engine**
+- **CloudWatch Metrics Collection** - CPU, network I/O, instance metadata (7-day lookback)
+- **EC2 Idle Detection** - Identifies instances with <5% CPU utilization
+- **Confidence Scoring** - Smart waste classification (0.0-1.0 confidence)
+- **Intelligent Recommendations** - Terminate/Stop/Downsize based on confidence
+
+#### ⚡ **Execution Engine**
+- **Autonomous Remediation** - Stops idle EC2 instances automatically
+- **7-Layer Safeguards** - Multi-checkpoint protection system
+- **Rollback Snapshots** - Full state backup before any action
+- **Dry-Run Mode** - Test everything before going live
+- **Configuration-Driven** - YAML-based policies (no code changes)
+
+#### 🛡️ **Safeguard System**
+
+Before executing ANY action, Wasteless validates:
+
+1. **Global Kill Switch** - Auto-remediation enabled?
+2. **Whitelist Protection** - Instance IDs or tags marked as critical?
+3. **Age Validation** - Instance older than 30 days?
+4. **Confidence Threshold** - Detection confidence ≥ 80%?
+5. **Idle Duration** - Idle for 14+ consecutive days?
+6. **Schedule Window** - Current time in allowed execution window?
+7. **Blast Radius Control** - Under max instances per run limit (3)?
+
+**If ANY check fails → action aborted + logged.**
+
+#### 📊 **Verification Engine**
+- **Savings Tracker** - Compares AWS Cost Explorer data before/after
+- **Accuracy Measurement** - Actual vs. estimated savings percentage
+- **ROI Proof** - Hard financial evidence of impact
+- **Complete Audit Trail** - Every action logged with metadata
+
+#### 💾 **Data Infrastructure**
+- **PostgreSQL Database** - 7 tables storing metrics, waste, actions, savings
+- **Metabase Dashboards** - Executive visibility into costs and savings
+- **Docker Deployment** - Full stack containerized
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│             AWS Account (Your Cloud)            │
+│  Cost Explorer API  │  CloudWatch API  │  EC2   │
+└──────────────┬──────────────────────────────────┘
+               │ Metrics & Cost Data
+               ↓
+┌─────────────────────────────────────────────────┐
+│           Wasteless Platform (Local)            │
+│                                                 │
+│  ┌──────────────┐    ┌───────────────────────┐ │
+│  │  COLLECTORS  │───→│   PostgreSQL          │ │
+│  │  (Metrics)   │    │   7 Core Tables       │ │
+│  └──────────────┘    └───────┬───────────────┘ │
+│                              │                  │
+│  ┌──────────────┐            │                  │
+│  │  DETECTORS   │───────────→│                  │
+│  │ (Idle EC2)   │            │                  │
+│  └──────────────┘            │                  │
+│                              │                  │
+│  ┌──────────────┐            │                  │
+│  │ REMEDIATORS  │←───────────┤                  │
+│  │ (Stop EC2)   │            │                  │
+│  └──────┬───────┘            │                  │
+│         │                    │                  │
+│         ↓                    ↓                  │
+│  ┌──────────────┐    ┌──────────────┐          │
+│  │   TRACKERS   │───→│   Metabase   │          │
+│  │  (Savings)   │    │  (Dashboard) │          │
+│  └──────────────┘    └──────────────┘          │
+└─────────────────────────────────────────────────┘
+```
+
+### Data Flow
+
+1. **Collect** → CloudWatch metrics → PostgreSQL (`ec2_metrics`)
+2. **Detect** → Analyze idle patterns → `waste_detected`, `recommendations`
+3. **Execute** → Safeguard validation → Stop instance → `actions_log`, `rollback_snapshots`
+4. **Verify** → Cost Explorer comparison → `savings_realized`
+5. **Visualize** → Metabase reads PostgreSQL → Executive dashboards
 
 ---
 
@@ -64,56 +135,51 @@ We don't just recommend. **We reduce your bill.**
 - Docker & Docker Compose
 - Python 3.11+
 - AWS Account with Cost Explorer enabled
-- 30 minutes
+- 15 minutes
 
 ### Installation
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/wastelessio/wasteless-insfrastructure
+git clone https://github.com/wastelessio/wasteless.git
 cd wasteless
 
 # 2. Create Python virtual environment
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Configure environment
 cp .env.template .env
-# Edit .env with your AWS credentials (see Configuration below)
+# Edit .env with your AWS credentials
 
 # 5. Start PostgreSQL + Metabase
 docker-compose up -d
 
-# 6. Wait 30 seconds for containers to start
+# 6. Wait for containers to initialize
 sleep 30
 
-# 7. Run first data collection
-python src/aws_collector.py
+# 7. Collect your first metrics
+python src/collectors/aws_cloudwatch.py
 
-# 8. Open Metabase
+# 8. Detect waste
+python src/detectors/ec2_idle.py
+
+# 9. Open Metabase
 open http://localhost:3000
 ```
 
-**That's it!** Your first AWS cost data is now in PostgreSQL.
+**Done!** You now have waste detection running on your AWS account.
 
 ---
 
 ## ⚙️ Configuration
 
-### 1. Create AWS IAM User (Read-Only)
+### 1. AWS IAM Setup (Read-Only)
 
-The platform needs read-only access to your AWS account.
-
-**In AWS Console:**
-1. Go to IAM → Users → Add User
-2. Name: `wasteless-readonly`
-3. Access type: **Programmatic access**
-4. Attach policies:
-   - `ViewOnlyAccess`
-   - Custom policy for Cost Explorer:
+Create an IAM user with these permissions:
 
 ```json
 {
@@ -125,16 +191,18 @@ The platform needs read-only access to your AWS account.
       "ce:GetCostForecast",
       "cloudwatch:GetMetricStatistics",
       "cloudwatch:ListMetrics",
-      "ec2:Describe*"
+      "ec2:Describe*",
+      "ec2:StopInstances",
+      "ec2:StartInstances"
     ],
     "Resource": "*"
   }]
 }
 ```
 
-5. Download credentials CSV
+**Note:** `ec2:Stop/StartInstances` only needed if using auto-remediation.
 
-### 2. Configure .env
+### 2. Environment Variables
 
 ```bash
 # AWS Configuration
@@ -143,7 +211,7 @@ AWS_ACCOUNT_ID=123456789012
 AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 
-# Database (default values for local Docker)
+# Database
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=wasteless
@@ -154,178 +222,154 @@ DB_PASSWORD=wasteless_dev_2025
 METABASE_URL=http://localhost:3000
 ```
 
-⚠️ **Never commit `.env` to Git!** It's already in `.gitignore`.
+### 3. Remediation Configuration
 
-### 3. Enable AWS Cost Explorer
+Edit `config/remediation.yaml` to control auto-remediation:
 
-If you see "not subscribed to AWS Cost Explorer":
-1. Go to AWS Console → Cost Explorer
-2. Click "Enable Cost Explorer"
-3. Wait 24 hours for historical data (or continue with limited data)
+```yaml
+auto_remediation:
+  enabled: false              # Set to true to enable execution
+  dry_run_days: 7            # Mandatory testing period
+
+safeguards:
+  min_instance_age_days: 30   # Don't touch new instances
+  min_idle_days: 14           # Must be idle 14+ days
+  min_confidence_score: 0.80  # 80% confidence required
+  max_instances_per_run: 3    # Max 3 stops per execution
+
+whitelist:
+  instance_ids:
+    - i-0123456789abcdef0     # Protected instances
+  tags:
+    Environment: production   # Protected by tags
+    Critical: "true"
+
+schedule:
+  allowed_days: [Saturday, Sunday]
+  allowed_hours: [2, 3, 4]    # 2-5 AM only
+  timezone: Europe/Paris
+```
+
+**Safety First:** Auto-remediation is **disabled by default**. Test in dry-run mode first.
 
 ---
 
 ## 📖 Usage
 
-### Collect AWS Costs
+### Collect Metrics
 
 ```bash
-# Collect last 30 days of AWS costs
-python src/aws_collector.py
+# Collect CloudWatch metrics for all EC2 instances
+python src/collectors/aws_cloudwatch.py
 
-# Verify data in database
+# Verify data
 docker exec -it wasteless-postgres psql -U wasteless -d wasteless \
-  -c "SELECT COUNT(*) FROM cloud_costs_raw;"
-```
-
-### Collect EC2 Metrics
-
-```bash
-# Collect CloudWatch metrics for EC2 instances
-python src/aws_cloudwatch_collector.py
+  -c "SELECT instance_id, cpu_avg, metric_date FROM ec2_metrics LIMIT 5;"
 ```
 
 ### Detect Waste
 
 ```bash
-# Run waste detection (EC2 idle instances)
-python src/waste_detector.py
+# Run idle EC2 detection
+python src/detectors/ec2_idle.py
 
 # View detected waste
 docker exec -it wasteless-postgres psql -U wasteless -d wasteless \
-  -c "SELECT * FROM waste_detected;"
+  -c "SELECT resource_id, monthly_waste_eur, confidence_score FROM waste_detected;"
 ```
 
-### Access Dashboards
+### Execute Remediation
+
+```bash
+# Dry-run mode (no actual AWS actions)
+python src/remediators/ec2_remediator.py --dry-run
+
+# Live execution (only if enabled in config)
+python src/remediators/ec2_remediator.py
+
+# View action log
+docker exec -it wasteless-postgres psql -U wasteless -d wasteless \
+  -c "SELECT resource_id, action_type, action_status FROM actions_log;"
+```
+
+### Verify Savings
+
+```bash
+# Track actual savings (wait 7+ days after action)
+python src/trackers/savings_tracker.py
+
+# View verified savings
+docker exec -it wasteless-postgres psql -U wasteless -d wasteless \
+  -c "SELECT actual_savings_eur, savings_accuracy_percent FROM savings_realized;"
+```
+
+### View Dashboards
 
 1. Open http://localhost:3000
-2. First time: Create admin account
+2. First time: Create Metabase admin account
 3. Connect to PostgreSQL:
-   - Host: `postgres` (container name, not localhost!)
+   - Host: `postgres` (Docker network name)
    - Port: 5432
    - Database: wasteless
    - User/Password: wasteless / wasteless_dev_2025
-
-4. Dashboards available:
-   - **AWS Cost Overview** - Total costs, trends, top services
-   - **Waste Detection** - Idle resources, savings opportunities
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐
-│   AWS Account   │
-│  (Your Cloud)   │
-└────────┬────────┘
-         │ APIs (Cost Explorer, CloudWatch)
-         ↓
-┌─────────────────────────────────────┐
-│     wasteless Platform (Local)         │
-│                                     │
-│  ┌──────────────┐  ┌─────────────┐ │
-│  │  Collectors  │→ │ PostgreSQL  │ │
-│  │   (Python)   │  │  Database   │ │
-│  └──────────────┘  └──────┬──────┘ │
-│                           │         │
-│  ┌──────────────┐         │         │
-│  │   Detectors  │────────→│         │
-│  │   (Rules)    │         │         │
-│  └──────────────┘         ↓         │
-│                    ┌─────────────┐  │
-│                    │  Metabase   │  │
-│                    │ (Dashboards)│  │
-│                    └─────────────┘  │
-└─────────────────────────────────────┘
-```
-
-### Data Flow
-
-1. **Collection**: Python scripts call AWS APIs daily
-2. **Storage**: Raw data → PostgreSQL (`cloud_costs_raw`, `ec2_metrics`)
-3. **Detection**: Waste detection rules analyze data
-4. **Recommendations**: Actionable savings → `waste_detected`, `recommendations`
-5. **Visualization**: Metabase reads PostgreSQL and displays dashboards
-
-### Tech Stack
-
-- **Language**: Python 3.11+
-- **Database**: PostgreSQL 16
-- **BI Tool**: Metabase (open source)
-- **Cloud SDK**: boto3 (AWS)
-- **Orchestration**: Docker Compose
-- **Data Processing**: pandas
+4. Explore pre-built dashboards
 
 ---
 
 ## 📊 Database Schema
 
-### `cloud_costs_raw`
-Raw cost data from AWS Cost Explorer
-- Daily costs per service
-- Granular usage tracking
+### Core Tables
 
-### `ec2_metrics`
-CloudWatch metrics for EC2 instances
-- CPU utilization (avg, max)
-- Network I/O
-- 7-day rolling window
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `ec2_metrics` | CloudWatch metrics snapshots | `instance_id`, `cpu_avg`, `cpu_max`, `network_in_mb`, `metric_date` |
+| `waste_detected` | Identified waste opportunities | `resource_id`, `waste_type`, `monthly_waste_eur`, `confidence_score` |
+| `recommendations` | Actionable optimizations | `recommendation_type`, `action_required`, `estimated_savings_eur`, `status` |
+| `actions_log` | Remediation execution log | `action_type`, `action_status`, `dry_run`, `metadata`, `error_message` |
+| `rollback_snapshots` | Pre-action state backups | `state_before` (JSON), `rollback_expiry`, `can_rollback` |
+| `savings_realized` | Verified actual savings | `cost_before_eur`, `cost_after_eur`, `actual_savings_eur`, `savings_accuracy_percent` |
+| `cloud_costs_raw` | Raw AWS cost data | `service`, `resource_id`, `cost`, `usage_date` |
 
-### `waste_detected`
-Identified waste opportunities
-- Resource ID, type, waste category
-- Monthly waste amount (€)
-- Confidence score (0-1)
-
-### `recommendations`
-Actionable cost optimizations
-- Action required (stop, resize, delete)
-- Estimated monthly savings
-- Implementation effort (low/medium/high)
-
-### `savings_realized`
-Tracked savings after applying recommendations
-- Actual vs. estimated savings
-- Verification method
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed schema.
+**Design Principles:**
+- JSONB for flexible metadata storage
+- Foreign keys for referential integrity
+- Automatic timestamps (`created_at`, `updated_at`)
+- Complete audit trail for compliance
 
 ---
 
 ## 🗺️ Roadmap
 
-### ✅ Phase 1 - MVP (Completed)
-- [x] AWS cost collection
-- [x] EC2 idle detection
-- [x] Basic dashboards
-- [x] PostgreSQL storage
+### ✅ Phase 1 - EC2 Optimization (Complete)
+- [x] CloudWatch metrics collection
+- [x] EC2 idle detection (<5% CPU)
+- [x] Autonomous stop remediation
+- [x] Multi-layer safeguards
+- [x] Rollback snapshots
+- [x] Savings verification
+- [x] PostgreSQL + Metabase
+- [x] End-to-end testing
 
-### 🔄 Phase 2 - Additional Rules (Months 4-6)
-- [ ] RDS idle detection
+### 🔄 Phase 2 - Additional AWS Resources (Q1 2025)
+- [ ] RDS idle database detection
 - [ ] EBS orphaned volumes
-- [ ] S3 bucket analysis
-- [ ] Kubernetes over-provisioning
-- [ ] Multi-account support
+- [ ] S3 bucket optimization
+- [ ] Elastic IP waste detection
+- [ ] Multi-account AWS support
 
-### 📅 Phase 3 - Execution (Months 7-9)
-- [ ] Terraform PR generation
-- [ ] Environment scheduling (dev/staging)
-- [ ] Optional auto-remediation
-- [ ] Slack/Email alerts
+### 📅 Phase 3 - Advanced Execution (Q2 2025)
+- [ ] Instance rightsizing (not just stop)
+- [ ] Environment scheduling (dev/staging auto-shutdown)
+- [ ] Terraform integration (infrastructure as code)
+- [ ] Slack/Teams notifications
+- [ ] Custom remediation policies
 
-### 📅 Phase 4 - Scale (Months 10-15)
-- [ ] GCP support
-- [ ] Azure support
-- [ ] Cost forecasting
+### 📅 Phase 4 - Multi-Cloud (Q3-Q4 2025)
+- [ ] Google Cloud Platform support
+- [ ] Microsoft Azure support
+- [ ] Kubernetes cluster optimization
+- [ ] Cost forecasting & budgets
 - [ ] Custom rules engine
-- [ ] Enterprise RBAC
-
-### 📅 Phase 5 - Market Fit (Months 16-24)
-- [ ] Public API
-- [ ] Terraform provider
-- [ ] SaaS offering
-- [ ] Multi-tenant support
 
 ---
 
@@ -334,186 +378,201 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed schema.
 ### Project Structure
 
 ```
-wasteless-platform/
-├── src/                    # Python source code
-│   ├── collectors/         # AWS data collection
-│   ├── detectors/          # Waste detection rules
-│   ├── core/              # Shared utilities
-│   └── utils/             # Helpers
-├── sql/                   # Database schemas
-│   ├── init.sql           # Initial schema
-│   └── migrations/        # Schema changes
-├── dashboards/            # Metabase exports
-├── docs/                  # Documentation
-├── tests/                 # Unit tests (TODO)
-├── docker-compose.yml     # Local development
-└── requirements.txt       # Python dependencies
+wasteless/
+├── src/
+│   ├── collectors/           # Data collection
+│   │   └── aws_cloudwatch.py
+│   ├── detectors/            # Waste detection
+│   │   └── ec2_idle.py
+│   ├── remediators/          # Execution
+│   │   └── ec2_remediator.py
+│   ├── trackers/             # Verification
+│   │   └── savings_tracker.py
+│   └── core/                 # Shared utilities
+│       ├── database.py
+│       └── safeguards.py
+├── sql/                      # Database schemas
+│   ├── init.sql
+│   └── migrations/
+├── config/                   # Configuration
+│   └── remediation.yaml
+├── tests/                    # Test suite
+│   └── test_end_to_end.py
+├── docker-compose.yml        # Infrastructure
+└── requirements.txt          # Dependencies
 ```
 
 ### Running Tests
 
 ```bash
-# TODO: Add pytest
-pytest tests/
+# Run end-to-end integration tests
+python tests/test_end_to_end.py
+
+# Expected output: Full pipeline test with savings verification
 ```
 
-### Code Style
+### Tech Stack
 
-```bash
-# Format code
-black src/
-
-# Lint
-ruff check src/
-```
-
-### Contributing
-
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development guidelines.
+- **Language:** Python 3.11+
+- **Database:** PostgreSQL 16
+- **BI Tool:** Metabase (open source)
+- **Cloud SDK:** boto3 (AWS)
+- **Infrastructure:** Docker Compose
+- **Data Processing:** pandas, numpy
+- **Configuration:** PyYAML
 
 ---
 
-## 📚 Documentation
+## 🛡️ Security & Safeguards
 
-- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [AWS Setup](docs/AWS_SETUP.md) - Detailed IAM configuration
-- [Development Guide](docs/DEVELOPMENT.md) - How to extend the platform
-- [Deployment](docs/DEPLOYMENT.md) - Production deployment options
+### Multi-Layer Protection
 
----
+1. **Configuration Kill Switch** - Global enable/disable
+2. **Whitelist Protection** - Instance IDs and tags
+3. **Age Validation** - Don't touch new resources
+4. **Confidence Thresholds** - Only act on high-confidence detections
+5. **Idle Duration Gates** - Must be idle for extended period
+6. **Schedule Restrictions** - Time-based execution windows
+7. **Blast Radius Control** - Limit instances per run
 
-## 🤝 Contributing
+### Rollback Capability
 
-Contributions are welcome! This is an **open source project** aimed at making cloud cost optimization accessible to everyone.
+- **Automatic Snapshots** - State saved before every action
+- **7-Day Retention** - Time to detect issues
+- **One-Click Restore** - Emergency rollback available
+- **Audit Trail** - Every action logged with metadata
 
-### How to contribute
+### Data Security
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- ✅ Read-only AWS access (detection only by default)
+- ✅ No credentials in code
+- ✅ Environment variables for secrets
+- ✅ Docker container isolation
+- ✅ PostgreSQL authentication
 
-### Areas needing help
-
-- 🐛 Bug reports and fixes
-- 📝 Documentation improvements
-- ✨ New waste detection rules
-- 🌍 Multi-cloud support (GCP, Azure)
-- 🧪 Test coverage
-- 🎨 Dashboard improvements
+**Security Issue?** Email: wasteless.io.entreprise@gmail.com
 
 ---
 
 ## 💼 Business Model
 
-### Open Source Core
-The detection engine, collectors, and basic dashboards are **free and open source** (Apache 2.0).
+### Open Source Core (Apache 2.0)
+Detection, execution, and basic dashboards are **free forever**.
 
-### Enterprise Edition (Coming Soon)
-- Auto-remediation
+### Enterprise Edition (Planned)
+- Multi-cloud support (GCP, Azure)
 - Advanced forecasting
 - SLA on savings
-- Multi-tenant support
 - Priority support
+- Custom integrations
 
-### Pricing (Planned)
-**Value-based**: 20-25% of realized savings
+### Pricing Philosophy
+**Value-based:** 20-25% of verified savings.
 
-Example:
+**Example:**
 - Detected waste: €100k/month
-- Realized savings: €70k/month
-- Your fee: €17.5k/month (25%)
+- Actual savings (verified): €70k/month
+- Your cost: €17.5k/month (25%)
 
-→ **ROI is immediate. Price discussion is irrelevant.**
+**→ Immediate ROI. Price becomes irrelevant.**
 
 ---
 
-## 🛡️ Security
+## 🤝 Contributing
 
-- ✅ Read-only AWS access (IAM policies)
-- ✅ No credentials stored in code
-- ✅ Environment variables for secrets
-- ✅ Docker container isolation
-- ✅ PostgreSQL with authentication
+We welcome contributions! This is an **open source project** making cloud optimization accessible to everyone.
 
-**Security issue?** Please email security@[yourdomain] (don't open public issue).
+### How to Contribute
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+### Areas Needing Help
+
+- 🐛 Bug reports and fixes
+- 📝 Documentation improvements
+- ✨ New detection rules (RDS, EBS, S3)
+- 🌍 Multi-cloud support (GCP, Azure)
+- 🧪 Test coverage expansion
+- 🎨 Metabase dashboard templates
 
 ---
 
 ## 📄 License
 
-Apache License 2.0 - see [LICENSE](LICENSE) file for details.
+**Apache License 2.0** - See [LICENSE](LICENSE) for details.
 
 **Why Apache 2.0?**
 - Maximum adoption (permissive)
 - Commercial use allowed
 - Patent protection included
-- Compatible with enterprise requirements
+- Enterprise-friendly
+
+---
+
+## 📞 Contact & Support
+
+- 📧 **Email:** wasteless.io.entreprise@gmail.com
+- 💬 **GitHub Issues:** [Report bugs or request features](https://github.com/wastelessio/wasteless/issues)
+- 🌐 **Website:** [Coming Soon]
+
+---
+
+## 🎯 Who Is This For?
+
+### Ideal Users
+- **Scale-ups** (100-500 employees) with growing cloud costs
+- **CFOs/Finance Teams** who need verified savings, not dashboards
+- **DevOps/Platform Teams** overwhelmed by manual optimization
+- **Companies** spending €50k-500k/month on AWS
+
+### Success Profile
+You're a good fit if:
+- Cloud costs are growing faster than revenue
+- You have idle dev/staging environments
+- Manual optimization is time-consuming
+- You want accountability (verified savings)
+- You need executive visibility
+
+---
+
+## 🚦 Project Status
+
+**Version:** v0.1.0 (Production-Ready MVP)
+**Status:** Active Development
+**Last Updated:** January 2025
+**Next Milestone:** Multi-resource detection (Q1 2025)
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Built with [Metabase](https://www.metabase.com/) for business intelligence
-- Uses [boto3](https://github.com/boto/boto3) for AWS integration
-- Inspired by the [wasteless Foundation](https://www.wasteless.org/) principles
-
----
-
-## 📞 Support & Contact
-
-- 📧 Email: [wasteless.io.entreprise@gmail.com]
-- 💬 GitHub Issues: [Report bugs or request features](https://github.com/yourusername/wasteless-platform/issues)
-- 🐦 Twitter: [@wastelessio]
-- 💼 LinkedIn: [Your Profile]
-
----
-
-## ⭐ Star History
-
-If this project helped you save money, please consider:
-- ⭐ **Starring the repository**
-- 🐦 **Sharing on social media**
-- 📝 **Writing about your experience**
-
-Every star motivates us to keep improving!
-
----
-
-## 🎯 Target Audience
-
-This platform is designed for:
-- **Scale-ups** (100-400 employees) with growing cloud costs
-- **CFOs** who need actual savings, not just visibility
-- **DevOps teams** overwhelmed by manual optimization
-- **Companies** spending €50k-300k/month on cloud
-
----
-
-## 🚦 Status
-
-**Current Version**: v0.1.0 (MVP)  
-**Status**: Active Development  
-**First Release**: January 2025  
-**Production Ready**: Q2 2025 (planned)
+Built with world-class open source tools:
+- [Metabase](https://www.metabase.com/) - Business intelligence
+- [boto3](https://github.com/boto/boto3) - AWS SDK
+- [PostgreSQL](https://www.postgresql.org/) - Database
+- [Docker](https://www.docker.com/) - Containerization
 
 ---
 
 <p align="center">
   <strong>Stop monitoring waste. Start eliminating it.</strong>
   <br>
-  Built with ❤️ for CFOs who want results.
+  Built with precision for CFOs who demand results.
 </p>
 
 ---
 
-## Quick Links
+## Quick Navigation
 
 - [Installation](#-quick-start)
 - [Configuration](#-configuration)
 - [Usage](#-usage)
 - [Architecture](#-architecture)
+- [Database Schema](#-database-schema)
 - [Roadmap](#-roadmap)
 - [Contributing](#-contributing)
 - [License](#-license)
