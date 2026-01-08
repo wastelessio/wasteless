@@ -16,11 +16,19 @@ import os
 import sys
 import boto3
 import json
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, date
+from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import execute_values
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime objects."""
+    def default(self, obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super().default(obj)
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -146,7 +154,7 @@ class EC2Remediator:
             action_log_id,
             instance_id,
             'ec2_instance',
-            json.dumps(instance_details),
+            json.dumps(instance_details, cls=DateTimeEncoder),
             True,
             expiry
         ))
@@ -199,7 +207,7 @@ class EC2Remediator:
             action_type,
             status,
             self.dry_run,
-            json.dumps(metadata) if metadata else None,
+            json.dumps(metadata, cls=DateTimeEncoder) if metadata else None,
             error_message,
             'system'
         ))
