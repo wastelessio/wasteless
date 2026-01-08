@@ -1,4 +1,4 @@
-# Wasteless.io
+# Wasteless.io - Backend Engine
 
 > **Autonomous cloud cost optimization. From detection to execution.**
 
@@ -6,6 +6,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Status](https://img.shields.io/badge/Status-Production--Ready-brightgreen.svg)]()
+
+**This is the backend engine.** For the web UI, see [wasteless-ui](https://github.com/wastelessio/wasteless-ui).
 
 ---
 
@@ -130,6 +132,15 @@ Before executing ANY action, Wasteless validates:
 
 ## 🚀 Quick Start
 
+### System Architecture
+
+Wasteless is split into two repositories:
+
+| Repository | Purpose | Installation |
+|------------|---------|--------------|
+| **wasteless** (this repo) | Backend engine, detection, execution | Install first (required) |
+| **[wasteless-ui](https://github.com/wastelessio/wasteless-ui)** | Web interface, dashboards | Install after backend (optional but recommended) |
+
 ### Prerequisites
 
 - Docker & Docker Compose
@@ -137,10 +148,10 @@ Before executing ANY action, Wasteless validates:
 - AWS Account with Cost Explorer enabled
 - 15 minutes
 
-### Installation
+### Installation (Backend Engine)
 
 ```bash
-# 1. Clone repository
+# 1. Clone this repository
 git clone https://github.com/wastelessio/wasteless.git
 cd wasteless
 
@@ -167,11 +178,27 @@ python src/collectors/aws_cloudwatch.py
 # 8. Detect waste
 python src/detectors/ec2_idle.py
 
-# 9. Open Metabase
+# 9. Open Metabase (optional)
 open http://localhost:3000
 ```
 
-**Done!** You now have waste detection running on your AWS account.
+**Backend is ready!** PostgreSQL is running and contains your AWS data.
+
+### Next Step: Install the Web UI (Recommended)
+
+For a user-friendly interface to manage recommendations:
+
+```bash
+# In a new terminal, keep wasteless backend running
+cd ..
+git clone https://github.com/wastelessio/wasteless-ui.git
+cd wasteless-ui
+
+# Follow installation in wasteless-ui/README.md
+# The UI will connect to the PostgreSQL database from this backend
+```
+
+See [wasteless-ui README](https://github.com/wastelessio/wasteless-ui) for full instructions.
 
 ---
 
