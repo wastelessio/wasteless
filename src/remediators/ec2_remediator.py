@@ -248,9 +248,9 @@ class EC2Remediator:
             # (Get additional data from database)
             cursor = self.conn.cursor()
             cursor.execute("""
-                SELECT 
+                SELECT
                     w.confidence_score,
-                    EXTRACT(DAY FROM (CURRENT_DATE - MIN(m.metric_date)))::int as idle_days
+                    EXTRACT(DAY FROM (CURRENT_DATE - MIN(m.created_at)))::int as idle_days
                 FROM waste_detected w
                 JOIN recommendations r ON r.waste_id = w.id
                 LEFT JOIN ec2_metrics m ON m.instance_id = w.resource_id
