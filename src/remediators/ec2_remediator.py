@@ -75,9 +75,67 @@ class EC2Remediator:
         
         # Database connection
         self.conn = get_db_connection()
-        
+
+        # Advisory lock ID for remediator (unique per account)
+        # Using hash of account_id to get consistent integer
+        self.lock_id = hash(self.account_id) % (2**31)
+
         logger.info(f"✅ EC2 Remediator initialized (dry_run={dry_run})")
-    
+
+    def acquire_lock(self, timeout_seconds: int = 5) -> bool:
+        """
+        Acquire distributed lock using PostgreSQL advisory lock.
+        Prevents concurrent remediation runs.
+
+        Args:
+            timeout_seconds: How long to wait for lock
+
+        Returns:
+            True if lock acquired, False if another process holds it
+        """
+        try:
+            cursor = self.conn.cursor()
+
+            # Try to acquire lock with timeout
+            cursor.execute("""
+                SELECT pg_try_advisory_lock(%s);
+            """, (self.lock_id,))
+
+            acquired = cursor.fetchone()[0]
+            cursor.close()
+
+            if acquired:
+                logger.info(f"🔒 Distributed lock acquired (ID: {self.lock_id})")
+            else:
+                logger.warning(
+                    f"⚠️  Could not acquire lock - another remediator is running"
+                )
+
+            return acquired
+
+        except Exception as e:
+            logger.error(f"Failed to acquire lock: {e}")
+            return False
+
+    def release_lock(self):
+        """Release distributed lock."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT pg_advisory_unlock(%s);
+            """, (self.lock_id,))
+
+            released = cursor.fetchone()[0]
+            cursor.close()
+
+            if released:
+                logger.info(f"🔓 Distributed lock released (ID: {self.lock_id})")
+            else:
+                logger.warning(f"⚠️  Lock was not held (ID: {self.lock_id})")
+
+        except Exception as e:
+            logger.error(f"Failed to release lock: {e}")
+
     def get_instance_details(self, instance_id: str) -> Optional[Dict]:
         """
         Get full instance details from AWS.
@@ -258,12 +316,12 @@ class EC2Remediator:
             cursor.execute("""
                 SELECT
                     w.confidence_score,
-                    EXTRACT(DAY FROM (CURRENT_DATE - MIN(m.created_at)))::int as idle_days
+                    -- Calculate idle days: days since waste was first detected
+                    -- This represents how long the instance has been idle (not metric age)
+                    EXTRACT(DAY FROM (CURRENT_DATE - w.detection_date))::int as idle_days
                 FROM waste_detected w
                 JOIN recommendations r ON r.waste_id = w.id
-                LEFT JOIN ec2_metrics m ON m.instance_id = w.resource_id
-                WHERE r.id = %s
-                GROUP BY w.confidence_score;
+                WHERE r.id = %s;
             """, (recommendation_id,))
             
             row = cursor.fetchone()
@@ -470,68 +528,87 @@ class EC2Remediator:
     def process_pending_recommendations(self, limit: int = 10) -> List[Dict]:
         """
         Process all pending stop recommendations.
-        
+        Uses distributed locking to prevent concurrent execution.
+
         Args:
             limit: Max recommendations to process
-            
+
         Returns:
             List of execution results
         """
-        logger.info("🔍 Fetching pending recommendations...")
-        
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT 
-                r.id as recommendation_id,
-                r.action_required,
-                r.estimated_monthly_savings_eur,
-                w.resource_id,
-                w.confidence_score
-            FROM recommendations r
-            JOIN waste_detected w ON r.waste_id = w.id
-            WHERE r.status = 'pending'
-              AND r.recommendation_type = 'stop_instance'
-            ORDER BY r.estimated_monthly_savings_eur DESC
-            LIMIT %s;
-        """, (limit,))
-        
-        pending = cursor.fetchall()
-        cursor.close()
-        
-        logger.info(f"Found {len(pending)} pending recommendations")
-        
-        results = []
-        
-        for row in pending:
-            rec_id, action, savings, instance_id, confidence = row
-            
-            logger.info(
-                f"\n{'='*60}\n"
-                f"Processing recommendation {rec_id}\n"
-                f"Instance: {instance_id}\n"
-                f"Potential savings: €{savings:.2f}/month\n"
-                f"Confidence: {confidence:.2f}\n"
-                f"{'='*60}"
+        # Acquire distributed lock
+        if not self.acquire_lock():
+            logger.error(
+                "❌ Cannot process recommendations - another remediator is running"
             )
-            
-            result = self.stop_instance(
-                instance_id=instance_id,
-                recommendation_id=rec_id,
-                reason=action
-            )
-            
-            results.append(result)
-            
-            # Respect max_instances_per_run limit
-            if len([r for r in results if r['success']]) >= 3:
-                logger.info("⚠️  Max instances per run reached (3)")
-                break
-        
-        return results
+            return []
+
+        try:
+            logger.info("🔍 Fetching pending recommendations...")
+
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT
+                    r.id as recommendation_id,
+                    r.action_required,
+                    r.estimated_monthly_savings_eur,
+                    w.resource_id,
+                    w.confidence_score
+                FROM recommendations r
+                JOIN waste_detected w ON r.waste_id = w.id
+                WHERE r.status = 'pending'
+                  AND r.recommendation_type = 'stop_instance'
+                ORDER BY r.estimated_monthly_savings_eur DESC
+                LIMIT %s;
+            """, (limit,))
+
+            pending = cursor.fetchall()
+            cursor.close()
+
+            logger.info(f"Found {len(pending)} pending recommendations")
+
+            results = []
+
+            for row in pending:
+                rec_id, action, savings, instance_id, confidence = row
+
+                logger.info(
+                    f"\n{'='*60}\n"
+                    f"Processing recommendation {rec_id}\n"
+                    f"Instance: {instance_id}\n"
+                    f"Potential savings: €{savings:.2f}/month\n"
+                    f"Confidence: {confidence:.2f}\n"
+                    f"{'='*60}"
+                )
+
+                result = self.stop_instance(
+                    instance_id=instance_id,
+                    recommendation_id=rec_id,
+                    reason=action
+                )
+
+                results.append(result)
+
+                # Respect max_instances_per_run limit
+                if len([r for r in results if r['success']]) >= 3:
+                    logger.info("⚠️  Max instances per run reached (3)")
+                    break
+
+            return results
+
+        finally:
+            # Always release lock
+            self.release_lock()
     
     def __del__(self):
-        """Close database connection."""
+        """Close database connection and release lock."""
         if hasattr(self, 'conn'):
+            # Try to release lock if held
+            try:
+                self.release_lock()
+            except:
+                pass  # Ignore errors during cleanup
+
             self.conn.close()
 
 
