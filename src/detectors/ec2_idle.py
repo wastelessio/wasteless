@@ -145,9 +145,6 @@ class EC2IdleDetector:
             # Get monthly cost
             monthly_cost = self.get_instance_monthly_cost(instance_type)
 
-            # Calculate waste (95% of cost if idle)
-            monthly_waste = round(monthly_cost * 0.95, 2)
-
             # Calculate confidence score
             # Closer to 0% CPU = higher confidence
             # Formula: 1.0 - (cpu_avg / threshold)
@@ -157,6 +154,16 @@ class EC2IdleDetector:
             #   cpu_avg = 4.5% → confidence = 1.0 - (4.5/5.0) = 0.10
             confidence = round(1.0 - (float(cpu_avg) / cpu_threshold), 2)
             confidence = max(0.0, min(1.0, confidence))  # Clamp between 0-1
+
+            # Calculate waste proportional to idle percentage
+            # Formula: cost × (1 - cpu_utilization_ratio)
+            # Examples:
+            #   cpu_avg = 0.5% → waste = 99.5% of cost
+            #   cpu_avg = 2.0% → waste = 98.0% of cost
+            #   cpu_avg = 4.5% → waste = 95.5% of cost
+            # This provides more accurate waste estimation than flat 95%
+            waste_ratio = 1.0 - (float(cpu_avg) / 100.0)
+            monthly_waste = round(monthly_cost * waste_ratio, 2)
 
             waste_record = {
                 'resource_id': instance_id,
@@ -171,6 +178,7 @@ class EC2IdleDetector:
                     'instance_type': instance_type,
                     'instance_state': instance_state,
                     'monthly_cost_eur': monthly_cost,
+                    'waste_ratio': waste_ratio,
                     'datapoints': datapoints,
                     'detection_method': 'cloudwatch_cpu_avg',
                     'threshold_used': cpu_threshold
