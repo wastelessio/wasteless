@@ -40,17 +40,9 @@
       applied_at TIMESTAMP
   );
   
-  -- Table des économies réalisées
-  CREATE TABLE IF NOT EXISTS savings_realized (
-      id SERIAL PRIMARY KEY,
-      recommendation_id INTEGER REFERENCES recommendations(id),
-      applied_date DATE NOT NULL,
-      actual_monthly_savings_eur DECIMAL(12, 4),
-      verification_method VARCHAR(50),
-      notes TEXT,
-      created_at TIMESTAMP DEFAULT NOW()
-  );
-  
+  -- Note: savings_realized table is defined in sql/migrations/remediation_tables.sql
+  -- (Complete version with all tracking columns)
+
   -- Index pour performance
   CREATE INDEX idx_costs_raw_date ON cloud_costs_raw(usage_date);
   CREATE INDEX idx_costs_raw_provider ON cloud_costs_raw(provider);
