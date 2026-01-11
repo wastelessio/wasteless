@@ -81,48 +81,51 @@ class AWSCloudWatchCollector:
     def get_ec2_instances(self):
         """
         Get list of all EC2 instances in the account.
-        
+        Uses pagination to handle accounts with >1000 instances.
+
         Returns:
             list[dict]: List of instance details
         """
-        logger.info("Fetching EC2 instances...")
-        
+        logger.info("Fetching EC2 instances with pagination...")
+
         try:
-            response = self.ec2_client.describe_instances()
-            
             instances = []
-            for reservation in response['Reservations']:
-                for instance in reservation['Instances']:
-                    # Extract instance details
-                    instance_data = {
-                        'instance_id': instance['InstanceId'],
-                        'instance_type': instance['InstanceType'],
-                        'instance_state': instance['State']['Name'],
-                        'launch_time': instance['LaunchTime'],
-                        'availability_zone': instance['Placement']['AvailabilityZone'],
-                        'tags': {}
-                    }
-                    
-                    # Extract tags
-                    if 'Tags' in instance:
-                        for tag in instance['Tags']:
-                            instance_data['tags'][tag['Key']] = tag['Value']
-                    
-                    instances.append(instance_data)
-            
+            paginator = self.ec2_client.get_paginator('describe_instances')
+
+            # Iterate through all pages
+            for page in paginator.paginate():
+                for reservation in page['Reservations']:
+                    for instance in reservation['Instances']:
+                        # Extract instance details
+                        instance_data = {
+                            'instance_id': instance['InstanceId'],
+                            'instance_type': instance['InstanceType'],
+                            'instance_state': instance['State']['Name'],
+                            'launch_time': instance['LaunchTime'],
+                            'availability_zone': instance['Placement']['AvailabilityZone'],
+                            'tags': {}
+                        }
+
+                        # Extract tags
+                        if 'Tags' in instance:
+                            for tag in instance['Tags']:
+                                instance_data['tags'][tag['Key']] = tag['Value']
+
+                        instances.append(instance_data)
+
             logger.info(f"✅ Found {len(instances)} EC2 instances")
-            
+
             # Display summary by state
             states = {}
             for inst in instances:
                 state = inst['instance_state']
                 states[state] = states.get(state, 0) + 1
-            
+
             for state, count in states.items():
                 logger.info(f"  - {state}: {count} instances")
-            
+
             return instances
-            
+
         except Exception as e:
             logger.error(f"Failed to fetch EC2 instances: {e}")
             return []
@@ -166,11 +169,11 @@ class AWSCloudWatchCollector:
             avg_cpu = sum(dp['Average'] for dp in datapoints) / len(datapoints)
             max_cpu = max(dp['Maximum'] for dp in datapoints)
             min_cpu = min(dp['Minimum'] for dp in datapoints)
-            
+
             metrics = {
-                'avg_cpu_percent': round(avg_cpu, 2),
-                'max_cpu_percent': round(max_cpu, 2),
-                'min_cpu_percent': round(min_cpu, 2),
+                'cpu_avg': round(avg_cpu, 2),
+                'cpu_max': round(max_cpu, 2),
+                'cpu_min': round(min_cpu, 2),
                 'datapoints_count': len(datapoints)
             }
             
@@ -229,22 +232,22 @@ class AWSCloudWatchCollector:
             datapoints_out = response_out.get('Datapoints', [])
             
             if not datapoints_in or not datapoints_out:
-                return {'avg_network_in_mb': 0.0, 'avg_network_out_mb': 0.0}
+                return {'network_in_mb': 0.0, 'network_out_mb': 0.0}
             
             # Calculate averages (convert bytes to MB)
             avg_in_bytes = sum(dp['Average'] for dp in datapoints_in) / len(datapoints_in)
             avg_out_bytes = sum(dp['Average'] for dp in datapoints_out) / len(datapoints_out)
             
             metrics = {
-                'avg_network_in_mb': round(avg_in_bytes / 1024 / 1024, 2),
-                'avg_network_out_mb': round(avg_out_bytes / 1024 / 1024, 2)
+                'network_in_mb': round(avg_in_bytes / 1024 / 1024, 2),
+                'network_out_mb': round(avg_out_bytes / 1024 / 1024, 2)
             }
             
             return metrics
             
         except Exception as e:
             logger.error(f"Failed to fetch network metrics for {instance_id}: {e}")
-            return {'avg_network_in_mb': 0.0, 'avg_network_out_mb': 0.0}
+            return {'network_in_mb': 0.0, 'network_out_mb': 0.0}
 
     def save_to_postgres(self, metrics_data):
         """
@@ -292,10 +295,10 @@ class AWSCloudWatchCollector:
                     instance_name,
                     metric['instance_state'],
                     metric['collection_date'],
-                    metric.get('avg_cpu_percent'),
-                    metric.get('max_cpu_percent'),
-                    metric.get('avg_network_in_mb'),
-                    metric.get('avg_network_out_mb')
+                    metric.get('cpu_avg'),
+                    metric.get('cpu_max'),
+                    metric.get('network_in_mb'),
+                    metric.get('network_out_mb')
                 ))
 
             # Batch insert with ON CONFLICT
