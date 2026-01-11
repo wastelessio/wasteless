@@ -61,14 +61,15 @@ class EC2Remediator:
         self.dry_run = dry_run
         self.region = os.getenv('AWS_REGION')
         self.account_id = os.getenv('AWS_ACCOUNT_ID')
-        
+
         # Initialize AWS client
+        # Use boto3 default credential provider chain (IAM role / env vars)
         self.ec2_client = boto3.client(
             'ec2',
-            region_name=self.region,
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+            region_name=self.region
         )
+
+        logger.debug("Using boto3 default credential provider (IAM role / env vars)")
         
         # Initialize safeguards
         self.safeguards = Safeguards()
@@ -391,27 +392,29 @@ class EC2Remediator:
                 logger.info(f"   Previous state: {instance_details['state']}")
                 logger.info(f"   New state: stopping")
             
-            # Step 6: Update action log (success)
+            # Step 6 & 7: Update action log and recommendation in single transaction
             cursor = self.conn.cursor()
-            cursor.execute("""
-                UPDATE actions_log
-                SET action_status = 'success',
-                    updated_at = NOW()
-                WHERE id = %s;
-            """, (action_log_id,))
-            self.conn.commit()
-            cursor.close()
-            
-            # Step 7: Update recommendation status
-            cursor = self.conn.cursor()
-            cursor.execute("""
-                UPDATE recommendations
-                SET status = 'applied',
-                    applied_at = NOW()
-                WHERE id = %s;
-            """, (recommendation_id,))
-            self.conn.commit()
-            cursor.close()
+            try:
+                # Update action log status
+                cursor.execute("""
+                    UPDATE actions_log
+                    SET action_status = 'success',
+                        updated_at = NOW()
+                    WHERE id = %s;
+                """, (action_log_id,))
+
+                # Update recommendation status
+                cursor.execute("""
+                    UPDATE recommendations
+                    SET status = 'applied',
+                        applied_at = NOW()
+                    WHERE id = %s;
+                """, (recommendation_id,))
+
+                # Commit both updates in single transaction
+                self.conn.commit()
+            finally:
+                cursor.close()
             
             result['success'] = True
             

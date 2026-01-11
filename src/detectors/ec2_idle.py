@@ -212,40 +212,50 @@ class EC2IdleDetector:
         logger.info(f"Saving {len(waste_list)} waste records to database...")
 
         cursor = self.conn.cursor()
-
         waste_ids = []
-        account_id = os.getenv('AWS_ACCOUNT_ID', 'unknown')
-        today = date.today()
 
-        for waste in waste_list:
-            # Insert waste record
-            cursor.execute("""
-                INSERT INTO waste_detected (
-                    detection_date, provider, account_id, resource_id,
-                    resource_type, waste_type, monthly_waste_eur,
-                    confidence_score, metadata
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id;
-            """, (
-                today,
-                'aws',
-                account_id,
-                waste['resource_id'],
-                waste['resource_type'],
-                waste['waste_type'],
-                waste['monthly_waste_eur'],
-                waste['confidence_score'],
-                json.dumps(waste['metadata'])
-            ))
+        try:
+            account_id = os.getenv('AWS_ACCOUNT_ID', 'unknown')
+            today = date.today()
 
-            waste_id = cursor.fetchone()[0]
-            waste_ids.append(waste_id)
+            for waste in waste_list:
+                # Insert waste record
+                cursor.execute("""
+                    INSERT INTO waste_detected (
+                        detection_date, provider, account_id, resource_id,
+                        resource_type, waste_type, monthly_waste_eur,
+                        confidence_score, metadata
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id;
+                """, (
+                    today,
+                    'aws',
+                    account_id,
+                    waste['resource_id'],
+                    waste['resource_type'],
+                    waste['waste_type'],
+                    waste['monthly_waste_eur'],
+                    waste['confidence_score'],
+                    json.dumps(waste['metadata'])
+                ))
 
-        self.conn.commit()
-        logger.info(f"✅ Saved {len(waste_ids)} waste records")
+                waste_id = cursor.fetchone()[0]
+                waste_ids.append(waste_id)
 
-        cursor.close()
+            # Commit all inserts in single transaction
+            self.conn.commit()
+            logger.info(f"✅ Saved {len(waste_ids)} waste records")
+
+        except Exception as e:
+            # Rollback all inserts on any error
+            self.conn.rollback()
+            logger.error(f"❌ Failed to save waste records: {e}")
+            logger.error("   Transaction rolled back - no partial data saved")
+            raise
+
+        finally:
+            cursor.close()
 
         return waste_ids
 
@@ -266,60 +276,69 @@ class EC2IdleDetector:
         logger.info(f"Generating recommendations for {len(waste_ids)} waste records...")
 
         cursor = self.conn.cursor()
-
         recommendations_created = 0
 
-        for waste_id in waste_ids:
-            # Get waste details
-            cursor.execute("""
-                SELECT resource_id, confidence_score, monthly_waste_eur, metadata
-                FROM waste_detected
-                WHERE id = %s;
-            """, (waste_id,))
+        try:
+            for waste_id in waste_ids:
+                # Get waste details
+                cursor.execute("""
+                    SELECT resource_id, confidence_score, monthly_waste_eur, metadata
+                    FROM waste_detected
+                    WHERE id = %s;
+                """, (waste_id,))
 
-            result = cursor.fetchone()
-            if not result:
-                continue
+                result = cursor.fetchone()
+                if not result:
+                    continue
 
-            resource_id, confidence, monthly_waste, metadata_json = result
-            # metadata is already a dict (JSONB type in PostgreSQL with psycopg2)
-            metadata = metadata_json if isinstance(metadata_json, dict) else json.loads(metadata_json)
+                resource_id, confidence, monthly_waste, metadata_json = result
+                # metadata is already a dict (JSONB type in PostgreSQL with psycopg2)
+                metadata = metadata_json if isinstance(metadata_json, dict) else json.loads(metadata_json)
 
-            cpu_avg = metadata.get('cpu_avg_7d', 0)
-            instance_type = metadata.get('instance_type', 'unknown')
+                cpu_avg = metadata.get('cpu_avg_7d', 0)
+                instance_type = metadata.get('instance_type', 'unknown')
 
-            # Determine recommendation type based on confidence
-            if confidence >= 0.90:
-                recommendation_type = 'terminate_instance'
-                action = f"TERMINATE instance {resource_id} (avg CPU: {cpu_avg:.1f}%)"
-            elif confidence >= 0.60:
-                recommendation_type = 'stop_instance'
-                action = f"STOP instance {resource_id} during off-hours (avg CPU: {cpu_avg:.1f}%)"
-            else:
-                recommendation_type = 'downsize_instance'
-                action = f"DOWNSIZE instance {resource_id} to smaller type (avg CPU: {cpu_avg:.1f}%)"
+                # Determine recommendation type based on confidence
+                if confidence >= 0.90:
+                    recommendation_type = 'terminate_instance'
+                    action = f"TERMINATE instance {resource_id} (avg CPU: {cpu_avg:.1f}%)"
+                elif confidence >= 0.60:
+                    recommendation_type = 'stop_instance'
+                    action = f"STOP instance {resource_id} during off-hours (avg CPU: {cpu_avg:.1f}%)"
+                else:
+                    recommendation_type = 'downsize_instance'
+                    action = f"DOWNSIZE instance {resource_id} to smaller type (avg CPU: {cpu_avg:.1f}%)"
 
-            # Insert recommendation
-            cursor.execute("""
-                INSERT INTO recommendations (
-                    waste_id, recommendation_type, action_required,
-                    estimated_monthly_savings_eur, status
-                )
-                VALUES (%s, %s, %s, %s, %s);
-            """, (
-                waste_id,
-                recommendation_type,
-                action,
-                monthly_waste,
-                'pending'
-            ))
+                # Insert recommendation
+                cursor.execute("""
+                    INSERT INTO recommendations (
+                        waste_id, recommendation_type, action_required,
+                        estimated_monthly_savings_eur, status
+                    )
+                    VALUES (%s, %s, %s, %s, %s);
+                """, (
+                    waste_id,
+                    recommendation_type,
+                    action,
+                    monthly_waste,
+                    'pending'
+                ))
 
-            recommendations_created += 1
+                recommendations_created += 1
 
-        self.conn.commit()
-        logger.info(f"✅ Created {recommendations_created} recommendations")
+            # Commit all inserts in single transaction
+            self.conn.commit()
+            logger.info(f"✅ Created {recommendations_created} recommendations")
 
-        cursor.close()
+        except Exception as e:
+            # Rollback all inserts on any error
+            self.conn.rollback()
+            logger.error(f"❌ Failed to generate recommendations: {e}")
+            logger.error("   Transaction rolled back - no partial data saved")
+            raise
+
+        finally:
+            cursor.close()
 
         return recommendations_created
 
