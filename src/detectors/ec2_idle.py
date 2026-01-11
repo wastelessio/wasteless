@@ -123,14 +123,14 @@ class EC2IdleDetector:
             MIN(cpu_avg) as cpu_min_7d,
             COUNT(*) as datapoints
         FROM ec2_metrics
-        WHERE collection_date >= CURRENT_DATE - INTERVAL '%s days'
+        WHERE collection_date >= CURRENT_DATE - %s::interval
           AND cpu_avg IS NOT NULL
         GROUP BY instance_id, instance_type, instance_state
         HAVING AVG(cpu_avg) < %s
         ORDER BY AVG(cpu_avg) ASC;
         """
 
-        cursor.execute(query, (days, cpu_threshold))
+        cursor.execute(query, (f'{days} days', cpu_threshold))
         idle_instances = cursor.fetchall()
 
         logger.info(f"Found {len(idle_instances)} idle instances")
@@ -284,29 +284,25 @@ class EC2IdleDetector:
             if confidence >= 0.90:
                 recommendation_type = 'terminate_instance'
                 action = f"TERMINATE instance {resource_id} (avg CPU: {cpu_avg:.1f}%)"
-                effort = 'low'
             elif confidence >= 0.60:
                 recommendation_type = 'stop_instance'
                 action = f"STOP instance {resource_id} during off-hours (avg CPU: {cpu_avg:.1f}%)"
-                effort = 'low'
             else:
                 recommendation_type = 'downsize_instance'
                 action = f"DOWNSIZE instance {resource_id} to smaller type (avg CPU: {cpu_avg:.1f}%)"
-                effort = 'medium'
 
             # Insert recommendation
             cursor.execute("""
                 INSERT INTO recommendations (
                     waste_id, recommendation_type, action_required,
-                    estimated_monthly_savings_eur, implementation_effort, status
+                    estimated_monthly_savings_eur, status
                 )
-                VALUES (%s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s);
             """, (
                 waste_id,
                 recommendation_type,
                 action,
                 monthly_waste,
-                effort,
                 'pending'
             ))
 
