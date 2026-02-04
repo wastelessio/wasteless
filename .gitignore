@@ -1,10 +1,66 @@
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Python
 venv/
+venv.old/
 __pycache__/
-*.pyc
-data/
-*.log
-.DS_Store
-*.sqlite
-.lock
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Data (generated)
+data/
+*.csv
+*.sqlite
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+*~
+
+# Lock files
+.lock
+*.lock
+!requirements.lock

@@ -283,22 +283,61 @@ schedule:
 
 ## 📖 Usage
 
-### Collect Metrics
+### 🤖 Automated Mode (Recommended)
+
+Set up complete automation with cron jobs to run collection, detection, and cleanup automatically:
+
+```bash
+# Install complete automation (interactive setup)
+./scripts/install_automation.sh install
+
+# You'll choose a schedule:
+#   1) Conservative: Daily at 2 AM, 3 AM, 4 AM (Recommended for production)
+#   2) Frequent: Every 6 hours (Good for testing)
+#   3) Very frequent: Every 3 hours (High AWS API usage)
+#   4) Custom schedules
+
+# Check automation status
+./scripts/install_automation.sh status
+
+# Remove automation
+./scripts/install_automation.sh remove
+```
+
+**What gets automated:**
+- ✅ CloudWatch metrics collection
+- ✅ EC2 idle waste detection
+- ✅ Orphaned recommendations cleanup
+- ✅ Automatic log rotation (30-day retention)
+
+**Logs location:** `logs/collector_*.log`, `logs/detector_*.log`, `logs/cleanup_*.log`
+
+---
+
+### 🔧 Manual Mode (For Development/Testing)
+
+#### Collect Metrics
 
 ```bash
 # Collect CloudWatch metrics for all EC2 instances
 python src/collectors/aws_cloudwatch.py
 
+# Or use the wrapper script with logging
+./scripts/run_collector.sh
+
 # Verify data
 docker exec -it wasteless-postgres psql -U wasteless -d wasteless \
-  -c "SELECT instance_id, cpu_avg, metric_date FROM ec2_metrics LIMIT 5;"
+  -c "SELECT instance_id, cpu_avg, collection_date FROM ec2_metrics LIMIT 5;"
 ```
 
-### Detect Waste
+#### Detect Waste
 
 ```bash
 # Run idle EC2 detection
 python src/detectors/ec2_idle.py
+
+# Or use the wrapper script with logging
+./scripts/run_detector.sh
 
 # View detected waste
 docker exec -it wasteless-postgres psql -U wasteless -d wasteless \
@@ -329,6 +368,43 @@ python src/trackers/savings_tracker.py
 docker exec -it wasteless-postgres psql -U wasteless -d wasteless \
   -c "SELECT actual_savings_eur, savings_accuracy_percent FROM savings_realized;"
 ```
+
+### Clean Up Orphaned Recommendations
+
+When you manually delete instances in AWS Console (outside of Wasteless), those recommendations will remain in the database. Use the cleanup utility to synchronize:
+
+```bash
+# Check what would be cleaned (dry-run mode)
+python src/utils/cleanup_orphaned_recommendations.py --dry-run
+
+# Execute cleanup (remove orphaned recommendations)
+python src/utils/cleanup_orphaned_recommendations.py
+
+# View logs
+tail -f logs/cleanup_*.log
+```
+
+**Automated Cleanup (Recommended):** Install a cron job to automatically sync daily:
+
+```bash
+# Install cron job (interactive setup)
+./scripts/install_cron.sh install
+
+# Check cron job status
+./scripts/install_cron.sh status
+
+# Remove cron job
+./scripts/install_cron.sh remove
+```
+
+The cron job will:
+- Run daily at 3 AM (or your chosen schedule)
+- Check all recommendations against actual AWS state
+- Mark orphaned recommendations as `obsolete`
+- Log all operations to `logs/cleanup_*.log`
+- Automatically clean up logs older than 30 days
+
+**📚 For detailed documentation, troubleshooting, and advanced usage, see [Cleanup Guide](docs/CLEANUP_GUIDE.md).**
 
 ### View Dashboards
 
