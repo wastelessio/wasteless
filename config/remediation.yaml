@@ -1,69 +1,42 @@
-# ============================================
-# Wasteless Auto-Remediation Configuration
-# ============================================
-
-# Global settings
 auto_remediation:
-  enabled: false  # Master switch (false = dry-run only)
-  dry_run_days: 7  # Mandatory dry-run period before real execution
-  
-# Whitelists (instances NEVER touched)
-whitelist:
-  instance_ids:
-    - i-prod-database-primary  # Example: critical DB
-    - i-prod-api-gateway       # Example: API gateway
-  
-  tags:
-    # Instances with these tags are PROTECTED
-    - key: "Environment"
-      value: "production"
-      
-    - key: "Critical"
-      value: "true"
-      
-    - key: "Wasteless"
-      value: "ignore"
-
-# Protection rules
+  enabled: false  # IMPORTANT: Set to true only after thorough testing
+  dry_run_days: 7
 protection:
-  # Never stop instances younger than X days
   min_instance_age_days: 30
-  
-  # Never stop instances with recent activity
-  min_idle_days: 14  # Must be idle 14+ days
-  
-  # Require minimum confidence score
-  min_confidence_score: 0.80  # 80%+
-  
-  # Maximum instances to stop per run
+  min_idle_days: 14
+  min_confidence_score: 0.8
   max_instances_per_run: 3
-
-# Rollback settings
-rollback:
-  # Automatically restart if metrics spike
-  auto_rollback_enabled: true
-  
-  # Monitor for X hours after stop
-  monitoring_window_hours: 24
-  
-  # Restart if any alert triggered
-  alert_triggers:
-    - "cloudwatch_alarm_triggered"
-    - "support_ticket_created"
-    - "manual_rollback_requested"
-
-# Schedule (when remediation can run)
+whitelist:
+  instance_ids: []
+  tags:
+  - key: Environment
+    value: Production
+  - key: Critical
+    value: 'true'
 schedule:
-  # Only run during maintenance windows
-  allowed_days: ["Saturday", "Sunday"]
-  allowed_hours: [2, 3, 4]  # 2am-5am only
-  timezone: "Europe/Paris"
-
-# Notifications
+  enabled: false
+  allowed_days:
+  - Saturday
+  - Sunday
+  allowed_hours:
+  - 2
+  - 3
+  - 4
+  timezone: UTC
 notifications:
-  slack_webhook: ""  # Optional
-  email: "ops@wasteless.io"
-  
-  notify_before_action: true  # Email 24h before stopping
-  notify_after_action: true   # Email after stop
-  notify_on_error: true       # Email on any error
+  email: ''
+  slack_webhook: ''
+  notify_before_action: true
+  notify_after_action: true
+  notify_on_error: true
+rollback:
+  enabled: true
+  retention_days: 7
+  auto_delete_after_verification: false
+logging:
+  level: INFO
+  audit_all_decisions: true
+  log_dry_run_results: true
+aws:
+  region: us-east-1
+  assume_role_arn: ''
