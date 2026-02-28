@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Cloud Resources - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+    <h1 style="margin-bottom: 0;">Cloud Resources</h1>
+    <button onclick="refreshData()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
+        <span>&#8635;</span> Refresh
+    </button>
+</div>
+
+<!-- Filters + Summary -->
+<div class="card mb-1" style="padding: 0.75rem;">
+    <form method="get" action="/cloud-resources">
+        <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">State</label>
+                <select name="state_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                    <option value="all" {% if state_filter == 'all' %}selected{% endif %}>All States</option>
+                    <option value="running" {% if state_filter == 'running' %}selected{% endif %}>Running</option>
+                    <option value="stopped" {% if state_filter == 'stopped' %}selected{% endif %}>Stopped</option>
+                    <option value="terminated" {% if state_filter == 'terminated' %}selected{% endif %}>Terminated</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Region</label>
+                <select name="region_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                    <option value="all" {% if region_filter == 'all' %}selected{% endif %}>All Regions</option>
+                    {% for region in regions %}
+                    <option value="{{ region }}" {% if region_filter == region %}selected{% endif %}>{{ region }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+
+            <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
+                <span><strong>{{ total_count }}</strong> instances</span>
+                <span class="text-success"><strong>{{ running_count }}</strong> running</span>
+                <span class="text-muted"><strong>{{ stopped_count }}</strong> stopped</span>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Instances Table -->
+{% if instances %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Instance ID</th>
+                    <th style="padding: 0.5rem;">Name</th>
+                    <th style="padding: 0.5rem;">Type</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Public IP</th>
+                    <th style="padding: 0.5rem;">Private IP</th>
+                    <th style="padding: 0.5rem;">Launch Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inst in instances %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <code style="font-size: 0.75rem;">{{ inst.instance_id }}</code>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <span style="font-weight: 500;">{{ inst.name }}</span>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <span style="font-size: 0.8rem;">{{ inst.type }}</span>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if inst.state == 'running' %}
+                        <span class="badge badge-success">running</span>
+                        {% elif inst.state == 'stopped' %}
+                        <span class="badge badge-warning">stopped</span>
+                        {% elif inst.state == 'terminated' %}
+                        <span class="badge badge-danger">terminated</span>
+                        {% elif inst.state == 'pending' %}
+                        <span class="badge badge-info">pending</span>
+                        {% else %}
+                        <span class="badge">{{ inst.state }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <span style="font-size: 0.8rem;">{{ inst.region }}</span>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <code style="font-size: 0.75rem;">{{ inst.public_ip }}</code>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <code style="font-size: 0.75rem;">{{ inst.private_ip }}</code>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if inst.launch_time %}
+                        <span style="font-size: 0.8rem;">{{ inst.launch_time.strftime('%Y-%m-%d %H:%M') }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No instances found matching your filters</p>
+</div>
+{% endif %}
+{% endblock %}

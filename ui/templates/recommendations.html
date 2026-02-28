@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Recommendations - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+    <h1 style="margin-bottom: 0;">Recommendations</h1>
+    <button type="button" onclick="syncWithAWS()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;" id="syncBtn">
+        <span id="syncIcon">&#8635;</span> Sync AWS
+    </button>
+</div>
+
+<!-- Filters + Summary in one row -->
+<div class="card mb-1" style="padding: 0.75rem;">
+    <form method="get" action="/recommendations">
+        <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Type</label>
+                <select name="type_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
+                    <option value="All" {% if type_filter == 'All' %}selected{% endif %}>All</option>
+                    <option value="stop_instance" {% if type_filter == 'stop_instance' %}selected{% endif %}>Stop</option>
+                    <option value="terminate_instance" {% if type_filter == 'terminate_instance' %}selected{% endif %}>Terminate</option>
+                    <option value="downsize_instance" {% if type_filter == 'downsize_instance' %}selected{% endif %}>Downsize</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min Savings</label>
+                <input type="number" name="min_savings" class="form-input" style="padding: 0.4rem; width: 80px;" value="{{ min_savings }}" min="0" max="1000" step="5">
+            </div>
+            <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min Confidence</label>
+                <input type="number" name="min_confidence" class="form-input" style="padding: 0.4rem; width: 70px;" value="{{ min_confidence }}" min="0" max="1" step="0.1">
+            </div>
+            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
+
+            <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
+                <span><strong>{{ recommendations|length }}</strong> recommendations</span>
+                {% set total_current_cost = recommendations|selectattr('monthly_cost')|sum(attribute='monthly_cost') or 0 %}
+                <span class="text-muted">Current: <strong>{{ "%.0f"|format(total_current_cost) }}</strong> EUR/mo</span>
+                <span class="text-success">Savings: <strong>{{ "%.0f"|format(total_savings) }}</strong> EUR/mo</span>
+                <span><strong>{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Recommendations Table -->
+{% if recommendations %}
+<div class="card" style="padding: 0.75rem;">
+    <form id="actionsForm">
+        <!-- Action buttons at top -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600);">0 selected</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="button" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem;">
+                    Approve Selected
+                </button>
+                <button type="button" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
+                    Reject
+                </button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table style="font-size: 0.85rem;">
+                <thead>
+                    <tr>
+                        <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleAll()"></th>
+                        <th style="padding: 0.5rem;">Instance</th>
+                        <th style="padding: 0.5rem;">Type</th>
+                        <th style="padding: 0.5rem;">Action</th>
+                        <th style="padding: 0.5rem;">CPU</th>
+                        <th style="padding: 0.5rem;">Cost</th>
+                        <th style="padding: 0.5rem;">After</th>
+                        <th style="padding: 0.5rem;">Savings</th>
+                        <th style="padding: 0.5rem;">Conf.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in recommendations %}
+                    {% set current_cost = rec.monthly_cost or 0 %}
+                    {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                    {% set after_cost = current_cost - savings %}
+                    {% set savings_pct = (savings / current_cost * 100) if current_cost > 0 else 100 %}
+                    <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                        <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                        <td style="padding: 0.4rem 0.5rem;">
+                            <code style="font-size: 0.75rem;">{{ rec.resource_id[:20] }}</code>
+                        </td>
+                        <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
+                        <td style="padding: 0.4rem 0.5rem;">
+                            {% if rec.recommendation_type == 'stop_instance' %}
+                            <span class="badge badge-warning">Stop</span>
+                            {% elif rec.recommendation_type == 'terminate_instance' %}
+                            <span class="badge badge-danger">Terminate</span>
+                            {% else %}
+                            <span class="badge badge-info">Downsize</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.4rem 0.5rem;">
+                            <span style="color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
+                        </td>
+                        <td style="padding: 0.4rem 0.5rem;">{{ "%.2f"|format(current_cost) }}</td>
+                        <td style="padding: 0.4rem 0.5rem;">
+                            {% if rec.recommendation_type in ['stop_instance', 'terminate_instance'] %}
+                            <span class="text-success">0.00</span>
+                            {% else %}
+                            <span>{{ "%.2f"|format(after_cost) }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.4rem 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                <span style="font-size: 0.7rem; color: var(--success);">({{ "%.0f"|format(savings_pct) }}%)</span>
+                            </div>
+                        </td>
+                        <td style="padding: 0.4rem 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                    <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                </div>
+                                <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No recommendations match your filters</p>
+</div>
+{% endif %}
+
+<!-- Help -->
+<details class="card mt-1" style="padding: 1rem;">
+    <summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem;">Need help? Click to expand</summary>
+    <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; font-size: 0.85rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span class="badge badge-warning">Stop</span>
+                <strong>Stop Instance</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Pause the instance. Reversible, no data loss. Can restart anytime.</p>
+        </div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span class="badge badge-danger">Terminate</span>
+                <strong>Terminate Instance</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Permanently delete. Irreversible action. EBS volumes may be deleted.</p>
+        </div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span class="badge badge-info">Downsize</span>
+                <strong>Downsize Instance</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Change to smaller type. Requires restart. Can upsize later if needed.</p>
+        </div>
+    </div>
+</details>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleAll() {
+        const checkboxes = document.querySelectorAll('.rec-checkbox');
+        const selectAll = document.getElementById('selectAll');
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateSelectedCount();
+    }
+
+    function toggleRow(row, event) {
+        if (event.target.type === 'checkbox') return;
+        const checkbox = row.querySelector('.rec-checkbox');
+        checkbox.checked = !checkbox.checked;
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        const count = document.querySelectorAll('.rec-checkbox:checked').length;
+        document.getElementById('selectedCount').textContent = count + ' selected';
+    }
+
+    function getSelectedIds() {
+        const checkboxes = document.querySelectorAll('.rec-checkbox:checked');
+        return Array.from(checkboxes).map(cb => parseInt(cb.value));
+    }
+
+    async function executeAction(action, dryRun = true) {
+        const ids = getSelectedIds();
+        if (ids.length === 0) {
+            alert('Please select at least one recommendation');
+            return;
+        }
+
+        const actionText = action === 'approve' ? 'approve' : 'reject';
+        if (!confirm('Are you sure you want to ' + actionText + ' ' + ids.length + ' recommendation(s)?')) {
+            return;
+        }
+
+        try {
+            const response = await api('/api/actions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    recommendation_ids: ids,
+                    action: action,
+                    dry_run: dryRun
+                })
+            });
+
+            console.log('API Response:', response);  // Debug log
+            const successCount = response.results.filter(r => r.success).length;
+
+            // Remove successful rows from table instantly
+            response.results.forEach(result => {
+                console.log('Processing result:', result);  // Debug log
+                if (result.success) {
+                    // Use String() to ensure type match with checkbox value attribute
+                    const checkbox = document.querySelector(`input.rec-checkbox[value="${String(result.recommendation_id)}"]`);
+                    console.log('Found checkbox:', checkbox);  // Debug log
+                    if (checkbox) {
+                        const row = checkbox.closest('tr');
+                        if (row) {
+                            row.remove();
+                            console.log('Removed row for rec_id:', result.recommendation_id);
+                        }
+                    }
+                } else {
+                    console.log('Action failed for rec_id:', result.recommendation_id, 'Error:', result.error);
+                }
+            });
+
+            // Update counters immediately
+            updateSelectedCount();
+            updateSummary();
+
+            // Show empty message if no rows left
+            const remainingRows = document.querySelectorAll('.rec-checkbox').length;
+            if (remainingRows === 0) {
+                document.querySelector('.table-container').innerHTML =
+                    '<div style="padding: 2rem; text-align: center;"><p class="text-muted">No recommendations match your filters</p></div>';
+            }
+
+            // Show success message
+            showToast(successCount + '/' + ids.length + ' actions completed successfully!', 'success');
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    function updateSummary() {
+        // Update the recommendation count in summary
+        const count = document.querySelectorAll('.rec-checkbox').length;
+        const countSpan = document.querySelector('.card.mb-1 strong');
+        if (countSpan) countSpan.textContent = count;
+    }
+
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    async function syncWithAWS() {
+        const btn = document.getElementById('syncBtn');
+        const icon = document.getElementById('syncIcon');
+
+        // Disable button and show loading
+        btn.disabled = true;
+        icon.style.animation = 'spin 1s linear infinite';
+        btn.innerHTML = '<span id="syncIcon" style="animation: spin 1s linear infinite;">&#8635;</span> Syncing...';
+
+        try {
+            const response = await api('/api/sync-aws', { method: 'POST' });
+
+            if (response.obsolete > 0) {
+                alert(`Sync complete!\n\n${response.obsolete} recommendation(s) marked as obsolete.\n${response.synced} instance(s) updated.\n\nPage will refresh.`);
+                refreshData();
+            } else {
+                alert(`Sync complete!\n\nAll ${response.total_checked} recommendations are up to date.`);
+                btn.disabled = false;
+                btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+            }
+        } catch (error) {
+            alert('Sync error: ' + error.message);
+            btn.disabled = false;
+            btn.innerHTML = '<span id="syncIcon">&#8635;</span> Sync AWS';
+        }
+    }
+</script>
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+</style>
+{% endblock %}
