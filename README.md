@@ -1,13 +1,20 @@
-# Wasteless.io - Backend Engine
+# Wasteless
 
 > **Autonomous cloud cost optimization. From detection to execution.**
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-orange.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-[![Status](https://img.shields.io/badge/Status-Production--Ready-brightgreen.svg)]()
 
-**This is the backend engine.** For the web UI, see [wasteless-ui](https://github.com/wastelessio/wasteless-ui).
+**Monorepo:** Backend engine + Web UI in one place.
+
+```
+wasteless/
+├── src/        # Detection, remediation, collection
+├── ui/         # FastAPI web dashboard
+└── sql/        # Database schema
+```
 
 ---
 
@@ -132,73 +139,45 @@ Before executing ANY action, Wasteless validates:
 
 ## 🚀 Quick Start
 
-### System Architecture
-
-Wasteless is split into two repositories:
-
-| Repository | Purpose | Installation |
-|------------|---------|--------------|
-| **wasteless** (this repo) | Backend engine, detection, execution | Install first (required) |
-| **[wasteless-ui](https://github.com/wastelessio/wasteless-ui)** | Web interface, dashboards | Install after backend (optional but recommended) |
-
 ### Prerequisites
 
 - Docker & Docker Compose
 - Python 3.11+
-- AWS Account with Cost Explorer enabled
-- 15 minutes
+- AWS credentials configured (`aws configure`)
 
-### Installation (Backend Engine)
+### 1. Clone and start the database
 
 ```bash
-# 1. Clone this repository
 git clone https://github.com/wastelessio/wasteless.git
 cd wasteless
-
-# 2. Create Python virtual environment
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Configure environment
-cp .env.template .env
-# Edit .env with your AWS credentials
-
-# 5. Start PostgreSQL + Metabase
 docker-compose up -d
-
-# 6. Wait for containers to initialize
-sleep 30
-
-# 7. Collect your first metrics
-python src/collectors/aws_cloudwatch.py
-
-# 8. Detect waste
-python src/detectors/ec2_idle.py
-
-# 9. Open Metabase (optional)
-open http://localhost:3000
 ```
 
-**Backend is ready!** PostgreSQL is running and contains your AWS data.
-
-### Next Step: Install the Web UI (Recommended)
-
-For a user-friendly interface to manage recommendations:
+### 2. Configure the backend
 
 ```bash
-# In a new terminal, keep wasteless backend running
-cd ..
-git clone https://github.com/wastelessio/wasteless-ui.git
-cd wasteless-ui
+cp .env.template .env
+# Edit .env with your DB credentials
 
-# Follow installation in wasteless-ui/README.md
-# The UI will connect to the PostgreSQL database from this backend
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-See [wasteless-ui README](https://github.com/wastelessio/wasteless-ui) for full instructions.
+### 3. Collect metrics and detect waste
+
+```bash
+python src/collectors/aws_cloudwatch.py
+python src/detectors/ec2_idle.py
+```
+
+### 4. Start the web UI
+
+```bash
+cd ui
+./install.sh && ./start.sh
+```
+
+Open http://localhost:8888
 
 ---
 
@@ -494,6 +473,12 @@ wasteless/
 │   └── core/                 # Shared utilities
 │       ├── database.py
 │       └── safeguards.py
+├── ui/                       # Web dashboard (FastAPI)
+│   ├── main.py
+│   ├── templates/
+│   ├── utils/
+│   ├── install.sh
+│   └── start.sh
 ├── sql/                      # Database schemas
 │   ├── init.sql
 │   └── migrations/
