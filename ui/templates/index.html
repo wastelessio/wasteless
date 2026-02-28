@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Wasteless.io{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="card mb-1" style="padding: 1.5rem; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 style="margin: 0 0 0.5rem 0; font-size: 1.5rem; color: white;">Welcome to Wasteless</h1>
+            <p style="margin: 0; opacity: 0.9;">Cloud Cost Optimization Platform</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+            <a href="/recommendations" class="btn" style="background: white; color: var(--primary); padding: 0.5rem 1rem;">Review Recommendations</a>
+            <a href="/dashboard" class="btn" style="background: rgba(255,255,255,0.2); color: white; padding: 0.5rem 1rem;">Dashboard</a>
+        </div>
+    </div>
+</div>
+
+<!-- KPIs Row -->
+<div class="card mb-1" style="padding: 1rem;">
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
+        <!-- Potential Savings -->
+        <div style="text-align: center; padding: 0.5rem;">
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: var(--success); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">&#8364;</span>
+            </div>
+            <div style="font-size: 2rem; font-weight: 700; color: var(--success);">{{ "%.0f"|format(metrics.potential_savings or 0) }} <span style="font-size: 1rem; font-weight: 500;">EUR</span></div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">Monthly potential</div>
+            <div style="font-size: 0.85rem; color: var(--success); margin-top: 0.25rem; font-weight: 500;">{{ "%.0f"|format((metrics.potential_savings or 0) * 12) }} EUR/year</div>
+        </div>
+
+        <!-- Pending Recommendations -->
+        <div style="text-align: center; padding: 0.5rem; border-left: 1px solid var(--gray-200); border-right: 1px solid var(--gray-200);">
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: var(--warning); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">&#9888;</span>
+            </div>
+            <div style="font-size: 2rem; font-weight: 700; color: var(--warning);">{{ metrics.pending_count or 0 }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">Pending reviews</div>
+            <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.25rem;">Ready to approve</div>
+        </div>
+
+        <!-- Actions Executed -->
+        <div style="text-align: center; padding: 0.5rem;">
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                <span style="background: var(--primary); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">&#10003;</span>
+            </div>
+            <div style="font-size: 2rem; font-weight: 700; color: var(--primary);">{{ metrics.success_count or 0 }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">Actions executed</div>
+            <div style="font-size: 0.85rem; color: var(--success); margin-top: 0.25rem;">Successfully applied</div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+    <!-- Latest Waste Detected -->
+    <div class="card" style="padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">Latest Waste Detected</h3>
+            <a href="/recommendations" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
+        </div>
+        {% if recent_waste %}
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.4rem 0.5rem;">Instance</th>
+                    <th style="padding: 0.4rem 0.5rem;">Type</th>
+                    <th style="padding: 0.4rem 0.5rem;">EUR/mo</th>
+                    <th style="padding: 0.4rem 0.5rem;">Conf.</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in recent_waste[:5] %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ item.resource_id[:15] }}...</code></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <span class="badge {% if item.waste_type == 'idle' %}badge-warning{% else %}badge-info{% endif %}">{{ item.waste_type }}</span>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;" class="text-success"><strong>{{ "%.0f"|format(item.monthly_waste_eur or 0) }}</strong></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.25rem;">
+                            <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                <div style="height: 100%; width: {{ (item.confidence_score or 0) * 100 }}%; background: {% if (item.confidence_score or 0) >= 0.8 %}var(--success){% else %}var(--warning){% endif %};"></div>
+                            </div>
+                            <span style="font-size: 0.75rem;">{{ "%.0f"|format((item.confidence_score or 0) * 100) }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding: 2rem; text-align: center;">
+            <p class="text-muted" style="margin: 0;">No waste detected yet</p>
+            <p style="font-size: 0.8rem; color: var(--gray-600); margin: 0.5rem 0 0 0;">Run the detection pipeline first</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Latest Actions -->
+    <div class="card" style="padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">Latest Actions</h3>
+            <a href="/history" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">View all &rarr;</a>
+        </div>
+        {% if recent_actions %}
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.4rem 0.5rem;">Instance</th>
+                    <th style="padding: 0.4rem 0.5rem;">Action</th>
+                    <th style="padding: 0.4rem 0.5rem;">Status</th>
+                    <th style="padding: 0.4rem 0.5rem;">Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in recent_actions[:5] %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ item.resource_id[:15] }}...</code></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        <span class="badge {% if item.action_type == 'stop' %}badge-warning{% elif item.action_type == 'terminate' %}badge-danger{% else %}badge-info{% endif %}">{{ item.action_type }}</span>
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if item.action_status == 'success' %}
+                        <span class="badge badge-success">OK</span>
+                        {% elif item.action_status == 'failed' %}
+                        <span class="badge badge-danger">Fail</span>
+                        {% else %}
+                        <span class="badge badge-info">{{ item.action_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;" class="text-muted">{{ item.action_date.strftime('%d/%m %H:%M') if item.action_date else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding: 2rem; text-align: center;">
+            <p class="text-muted" style="margin: 0;">No actions executed yet</p>
+            <p style="font-size: 0.8rem; color: var(--gray-600); margin: 0.5rem 0 0 0;">Approve recommendations to see results</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Navigation -->
+<div class="card mt-1" style="padding: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; gap: 2rem; font-size: 0.85rem;">
+            <a href="/recommendations" style="text-decoration: none; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">&#8594;</span>
+                <strong>Review {{ metrics.pending_count or 0 }} Recommendations</strong>
+            </a>
+            <a href="/dashboard" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">&#128200;</span>
+                Dashboard
+            </a>
+            <a href="/history" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">&#128196;</span>
+                History
+            </a>
+            <a href="/settings" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">&#9881;</span>
+                Settings
+            </a>
+        </div>
+        <button onclick="refreshData()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Refresh</button>
+    </div>
+</div>
+{% endblock %}

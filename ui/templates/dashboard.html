@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Wasteless.io{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 1rem;">
+    <h1 style="margin-bottom: 0.25rem;">Dashboard</h1>
+</div>
+
+<!-- KPIs Row -->
+<div class="card mb-1" style="padding: 1rem;">
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem;">
+        <!-- Potential Savings -->
+        <div style="text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: var(--success); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">&#8364;</span>
+            </div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--success);">{{ "%.0f"|format(kpis.potential_monthly or 0) }} <span style="font-size: 1rem; font-weight: 500;">EUR</span></div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">Monthly potential</div>
+            <div style="font-size: 0.8rem; color: var(--gray-600); margin-top: 0.25rem;">{{ "%.0f"|format((kpis.potential_monthly or 0) * 12) }} EUR/year</div>
+        </div>
+
+        <!-- Cumulative Savings -->
+        <div style="text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: var(--primary); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">&#10003;</span>
+            </div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--primary);">{{ "%.0f"|format(kpis.cumulative_savings or 0) }} <span style="font-size: 1rem; font-weight: 500;">EUR</span></div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">Total saved</div>
+            <div style="font-size: 0.8rem; color: var(--success); margin-top: 0.25rem;">Since launch</div>
+        </div>
+
+        <!-- Cost of Inaction -->
+        <div style="text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: {% if (kpis.potential_monthly or 0) > 0 %}var(--danger){% else %}var(--success){% endif %}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">{% if (kpis.potential_monthly or 0) > 0 %}&#9888;{% else %}&#10003;{% endif %}</span>
+            </div>
+            {% if (kpis.potential_monthly or 0) > 0 %}
+            {% set daily_loss = (kpis.potential_monthly or 0) / 30 %}
+            {% set total_lost = daily_loss * (kpis.days_pending or 0) %}
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--danger);">{{ "%.1f"|format(daily_loss) }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">EUR/day lost</div>
+            <div style="font-size: 0.8rem; color: var(--danger); margin-top: 0.25rem;">~{{ "%.0f"|format(total_lost) }} EUR over {{ "%.0f"|format(kpis.days_pending or 0) }}d</div>
+            {% else %}
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--success);">0</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">EUR/day lost</div>
+            <div style="font-size: 0.8rem; color: var(--success); margin-top: 0.25rem;">All clear!</div>
+            {% endif %}
+        </div>
+
+        <!-- Last Analysis -->
+        <div style="text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="background: var(--gray-500); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;">&#128337;</span>
+            </div>
+            {% if kpis.last_analysis %}
+            {% set hours_ago = ((now() - kpis.last_analysis).total_seconds() / 3600) | int %}
+            {% set days_ago = (hours_ago / 24) | int %}
+            {% if hours_ago < 48 %}
+            <div style="font-size: 1.75rem; font-weight: 700; color: {% if hours_ago < 24 %}var(--success){% else %}var(--warning){% endif %};">{{ hours_ago }}h</div>
+            {% else %}
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--danger);">{{ days_ago }}d</div>
+            {% endif %}
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">Last analysis</div>
+            <div style="font-size: 0.8rem; color: var(--gray-600); margin-top: 0.25rem;">{{ kpis.last_analysis.strftime('%d/%m %H:%M') }}</div>
+            {% else %}
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-400);">--</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); text-transform: uppercase;">Last analysis</div>
+            <div style="font-size: 0.8rem; color: var(--gray-600); margin-top: 0.25rem;">No scan yet</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Secondary KPIs Row -->
+<div class="card mb-1" style="padding: 0.75rem;">
+    <div style="display: flex; justify-content: space-around; align-items: center; font-size: 0.85rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--warning);">&#9888;</span>
+            <span><strong>{{ kpis.waste_count or 0 }}</strong> idle instances</span>
+        </div>
+        <div style="border-left: 1px solid var(--gray-200); height: 24px;"></div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: {% if (kpis.success_rate or 0) >= 90 %}var(--success){% elif (kpis.success_rate or 0) >= 70 %}var(--primary){% else %}var(--danger){% endif %};">%</span>
+            <span><strong>{{ "%.0f"|format(kpis.success_rate or 0) }}%</strong> success rate</span>
+        </div>
+        <div style="border-left: 1px solid var(--gray-200); height: 24px;"></div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--primary);">&#10003;</span>
+            <span><strong>{{ "%.0f"|format(kpis.verified_savings or 0) }}</strong> EUR verified</span>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+    <!-- Waste Trend Chart -->
+    <div class="card" style="padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">Waste Detection Trend</h3>
+            <span class="text-muted" style="font-size: 0.8rem;">Last 90 days</span>
+        </div>
+        {% if waste_trend %}
+        <div style="height: 180px; position: relative;">
+            <canvas id="wasteTrendChart"></canvas>
+        </div>
+        {% else %}
+        <div style="height: 180px; display: flex; align-items: center; justify-content: center;">
+            <p class="text-muted" style="margin: 0;">No data available yet</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recommendations by Type -->
+    <div class="card" style="padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1rem;">By Type</h3>
+            <span class="text-muted" style="font-size: 0.8rem;">Pending</span>
+        </div>
+        {% if rec_by_type %}
+        <div style="height: 180px; position: relative;">
+            <canvas id="recTypeChart"></canvas>
+        </div>
+        {% else %}
+        <div style="height: 180px; display: flex; align-items: center; justify-content: center;">
+            <p class="text-muted" style="margin: 0;">No pending recommendations</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ROI Summary -->
+<div class="card mt-1" style="padding: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <h3 style="margin: 0; font-size: 1rem;">ROI Summary</h3>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; font-size: 0.85rem;">
+        <!-- Total Saved -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(72, 187, 120, 0.1); border-radius: 8px;">
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--success);">{{ "%.0f"|format(kpis.cumulative_savings or 0) }} EUR</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Total Saved</div>
+        </div>
+        <!-- Potential if acted -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(237, 137, 54, 0.1); border-radius: 8px;">
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--warning);">{{ "%.0f"|format((kpis.potential_monthly or 0) * 12) }} EUR</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Potential/year</div>
+        </div>
+        <!-- Capture Rate -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(102, 126, 234, 0.1); border-radius: 8px;">
+            {% set total_identified = (kpis.cumulative_savings or 0) + (kpis.potential_monthly or 0) %}
+            {% set capture_rate = ((kpis.cumulative_savings or 0) / total_identified * 100) if total_identified > 0 else 0 %}
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">{{ "%.0f"|format(capture_rate) }}%</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Capture Rate</div>
+        </div>
+        <!-- Actions Executed -->
+        <div style="text-align: center; padding: 0.75rem; background: rgba(160, 174, 192, 0.1); border-radius: 8px;">
+            {% set total_actions = (100 / (kpis.success_rate or 1)) * (kpis.success_rate or 0) / 100 if kpis.success_rate else 0 %}
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--gray-600);">{{ kpis.waste_count or 0 }} / {{ "%.0f"|format(kpis.waste_count or 0) }}</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600);">Pending / Total</div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card mt-1" style="padding: 0.75rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; gap: 1.5rem; font-size: 0.85rem;">
+            <a href="/recommendations" style="text-decoration: none; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">&#8594;</span>
+                <strong>Review Recommendations</strong>
+            </a>
+            <a href="/history" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">&#128196;</span>
+                View History
+            </a>
+            <a href="/settings" style="text-decoration: none; color: var(--gray-600); display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--gray-300); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">&#9881;</span>
+                Settings
+            </a>
+        </div>
+        <button onclick="refreshData()" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Refresh</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    {% if waste_trend %}
+    // Waste Trend Chart
+    new Chart(document.getElementById('wasteTrendChart'), {
+        type: 'line',
+        data: {
+            labels: [{% for item in waste_trend %}'{{ item.date }}'{% if not loop.last %},{% endif %}{% endfor %}],
+            datasets: [{
+                label: 'Waste (EUR/month)',
+                data: [{% for item in waste_trend %}{{ item.total_waste or 0 }}{% if not loop.last %},{% endif %}{% endfor %}],
+                borderColor: '#f56565',
+                backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: '#f56565'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { font: { size: 11 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+    {% endif %}
+
+    {% if rec_by_type %}
+    // Recommendations by Type Chart
+    new Chart(document.getElementById('recTypeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: [{% for item in rec_by_type %}'{{ item.recommendation_type | replace("_instance", "") | title }}'{% if not loop.last %},{% endif %}{% endfor %}],
+            datasets: [{
+                data: [{% for item in rec_by_type %}{{ item.count }}{% if not loop.last %},{% endif %}{% endfor %}],
+                backgroundColor: ['#ed8936', '#f56565', '#667eea', '#48bb78'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: { size: 11 }
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}
