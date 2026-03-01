@@ -81,7 +81,7 @@ echo ""
 # =============================================================================
 # VERIFICATION DES PREREQUIS
 # =============================================================================
-print_header "1/6 - Verification des prerequis"
+print_header "1/7 - Verification des prerequis"
 
 MISSING_DEPS=0
 
@@ -153,7 +153,7 @@ print_step "Tous les prerequis sont satisfaits"
 # =============================================================================
 # CREATION DE L'ENVIRONNEMENT VIRTUEL
 # =============================================================================
-print_header "2/6 - Configuration de l'environnement Python"
+print_header "2/7 - Configuration de l'environnement Python"
 
 if [ -d "venv" ]; then
     print_warning "Environnement virtuel existant detecte"
@@ -181,7 +181,7 @@ print_step "Dependances Python installees"
 # =============================================================================
 # CONFIGURATION DU FICHIER .ENV
 # =============================================================================
-print_header "3/6 - Configuration de l'application"
+print_header "3/7 - Configuration de l'application"
 
 if [ -f ".env" ]; then
     print_warning "Fichier .env existant detecte"
@@ -272,7 +272,7 @@ fi
 # =============================================================================
 # DEMARRAGE DE LA BASE DE DONNEES
 # =============================================================================
-print_header "4/6 - Demarrage de la base de donnees"
+print_header "4/7 - Demarrage de la base de donnees"
 
 # Charger le mot de passe depuis .env
 source .env
@@ -307,7 +307,7 @@ fi
 # =============================================================================
 # INITIALISATION DU SCHEMA
 # =============================================================================
-print_header "5/6 - Initialisation du schema de base de donnees"
+print_header "5/7 - Initialisation du schema de base de donnees"
 
 # Executer les migrations
 print_info "Application des migrations..."
@@ -324,9 +324,73 @@ done
 print_step "Schema de base de donnees initialise"
 
 # =============================================================================
+# INSTALLATION DE L'INTERFACE WEB
+# =============================================================================
+print_header "6/7 - Installation de l'interface web"
+
+# Environnement virtuel UI
+if [ -d "ui/venv" ]; then
+    print_step "Environnement virtuel UI deja present"
+else
+    python3 -m venv ui/venv
+    print_step "Environnement virtuel UI cree"
+fi
+
+ui/venv/bin/pip install --upgrade pip -q
+ui/venv/bin/pip install -r ui/requirements.txt -q
+print_step "Dependances UI installees"
+
+# Fichier ui/.env auto-genere depuis le root .env (deja source)
+if [ ! -f "ui/.env" ]; then
+    cat > ui/.env << UIENV
+# WasteLess UI Configuration - Generated: $(date)
+DB_HOST=${DB_HOST:-localhost}
+DB_PORT=${DB_PORT:-5432}
+DB_NAME=${DB_NAME:-wasteless}
+DB_USER=${DB_USER:-wasteless}
+DB_PASSWORD=${DB_PASSWORD}
+WASTELESS_BACKEND_PATH=$(pwd)
+STREAMLIT_SERVER_PORT=8888
+STREAMLIT_SERVER_ADDRESS=localhost
+LOG_LEVEL=INFO
+UIENV
+    chmod 600 ui/.env
+    print_step "Configuration UI creee (ui/.env)"
+else
+    print_step "Configuration UI existante conservee"
+fi
+
+# Alias wasteless
+UI_DIR="$(pwd)/ui"
+ALIAS_LINE="alias wasteless='$UI_DIR/start.sh'"
+SHELL_RC=""
+if [ -f "$HOME/.zshrc" ]; then
+    SHELL_RC="$HOME/.zshrc"
+elif [ -f "$HOME/.bashrc" ]; then
+    SHELL_RC="$HOME/.bashrc"
+fi
+
+if [ -n "$SHELL_RC" ]; then
+    if grep -q "alias wasteless='$UI_DIR/start.sh'" "$SHELL_RC" 2>/dev/null; then
+        print_step "Alias 'wasteless' deja present"
+    elif grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
+        sed -i '' "s|alias wasteless=.*|$ALIAS_LINE|" "$SHELL_RC"
+        print_step "Alias 'wasteless' mis a jour dans $SHELL_RC"
+    else
+        echo "" >> "$SHELL_RC"
+        echo "# WasteLess CLI" >> "$SHELL_RC"
+        echo "$ALIAS_LINE" >> "$SHELL_RC"
+        print_step "Alias 'wasteless' ajoute a $SHELL_RC"
+    fi
+else
+    print_warning "Shell non detecte. Ajoutez manuellement:"
+    echo "  alias wasteless='$(pwd)/ui/start.sh'"
+fi
+
+# =============================================================================
 # VERIFICATION FINALE
 # =============================================================================
-print_header "6/6 - Verification de l'installation"
+print_header "7/7 - Verification de l'installation"
 
 # Test de connexion DB
 print_info "Test de connexion a la base de donnees..."
@@ -367,25 +431,31 @@ fi
 # =============================================================================
 print_header "Installation terminee"
 
-echo -e "${GREEN}${BOLD}WasteLess a ete installe avec succes!${NC}"
+echo -e "${GREEN}${BOLD}WasteLess est installe et pret!${NC}"
 echo ""
-echo -e "${BOLD}Services demarres:${NC}"
-echo "  - PostgreSQL: localhost:5432"
+echo -e "${BOLD}Pour demarrer:${NC}"
+echo ""
+echo -e "  ${CYAN}1. Rechargez votre shell:${NC}"
+if [ -n "$SHELL_RC" ]; then
+    echo "     source $SHELL_RC"
+else
+    echo "     Ouvrez un nouveau terminal"
+fi
+echo ""
+echo -e "  ${CYAN}2. Lancez l'interface:${NC}"
+echo "     wasteless"
+echo "     -> http://localhost:8888"
 echo ""
 echo -e "${BOLD}Prochaines etapes:${NC}"
 echo ""
-echo "  1. ${CYAN}Installer et demarrer l'interface web:${NC}"
-echo "     cd ui && ./install.sh"
-echo "     -> Acces: http://localhost:8888"
-echo ""
-echo "  2. ${CYAN}Collecter les metriques AWS:${NC}"
+echo "  1. ${CYAN}Collecter les metriques AWS:${NC}"
 echo "     source venv/bin/activate"
 echo "     python3 src/collectors/aws_cloudwatch.py"
 echo ""
-echo "  3. ${CYAN}Detecter le gaspillage:${NC}"
+echo "  2. ${CYAN}Detecter le gaspillage:${NC}"
 echo "     python3 src/detectors/ec2_idle.py"
 echo ""
-echo "  4. ${CYAN}Voir les recommandations:${NC}"
+echo "  3. ${CYAN}Voir les recommandations:${NC}"
 echo "     -> http://localhost:8888/recommendations"
 echo ""
 echo -e "${BOLD}Pages disponibles (http://localhost:8888):${NC}"
@@ -397,8 +467,7 @@ echo "  - /history           Historique des remediations"
 echo "  - /settings          Configuration et whitelist"
 echo ""
 echo -e "${BOLD}Commandes utiles:${NC}"
-echo "  - Activer l'environnement: source venv/bin/activate"
-echo "  - Demarrer l'interface:    cd ui && ./start.sh"
+echo "  - Demarrer l'interface:    wasteless"
 echo "  - Voir les logs Docker:    docker compose logs -f"
 echo "  - Arreter les services:    docker compose down"
 echo "  - Lancer les tests:        ./venv/bin/pytest tests/"
