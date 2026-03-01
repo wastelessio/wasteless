@@ -132,8 +132,24 @@
     </form>
 </div>
 {% else %}
-<div class="card" style="padding: 2rem; text-align: center;">
-    <p class="text-muted" style="margin: 0;">No recommendations match your filters</p>
+{% set filters_active = type_filter != 'All' or min_savings > 0 or min_confidence > 0 %}
+<div class="card" style="padding: 2.5rem; text-align: center;">
+    {% if filters_active %}
+        <div style="font-size: 2rem; margin-bottom: 0.75rem;">🔍</div>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations match your filters</p>
+        <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">Try relaxing the filters to see more results.</p>
+        <a href="/recommendations" class="btn btn-outline" style="padding: 0.4rem 1rem;">Reset filters</a>
+    {% else %}
+        <div style="font-size: 2rem; margin-bottom: 0.75rem;">✅</div>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">No idle instances detected</p>
+        <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Either everything looks healthy, or the collector hasn't run yet.</p>
+        <div style="display: inline-block; text-align: left; background: var(--gray-100); border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.85rem;">
+            <p style="margin: 0 0 0.5rem; font-weight: 600; color: var(--gray-700);">Run the pipeline to collect data:</p>
+            <code style="display: block; margin-bottom: 0.25rem;">source venv/bin/activate</code>
+            <code style="display: block; margin-bottom: 0.25rem;">python3 src/collectors/aws_cloudwatch.py</code>
+            <code style="display: block;">python3 src/detectors/ec2_idle.py</code>
+        </div>
+    {% endif %}
 </div>
 {% endif %}
 
