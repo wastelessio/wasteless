@@ -97,5 +97,8 @@ echo ""
 echo -e "${GREEN}Starting WasteLess UI on http://localhost:$PORT${NC}"
 echo ""
 
-# Run with uvicorn (hot reload enabled)
-exec uvicorn main:app --host 0.0.0.0 --port $PORT --reload
+# Run with uvicorn (hot reload on source files only, excluding venv)
+exec uvicorn main:app --host 0.0.0.0 --port $PORT --reload \
+    --reload-exclude 'venv/**' \
+    --reload-exclude '*.pyc' \
+    --reload-exclude '__pycache__/**'

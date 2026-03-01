@@ -86,11 +86,10 @@ def _file_lock(filepath: str, mode: str = 'r', exclusive: bool = False):
         _config_lock.release()
 
 # Path to backend config file
-# wasteless-ui/utils/ -> go up 2 levels -> wasteless/
+# ui/utils/ -> go up 2 levels -> project root (wasteless/)
 BACKEND_PATH = os.path.abspath(os.path.join(
     os.path.dirname(__file__),
-    '..', '..',
-    'wasteless'
+    '..', '..'
 ))
 CONFIG_PATH = os.path.join(BACKEND_PATH, 'config', 'remediation.yaml')
 

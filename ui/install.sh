@@ -85,11 +85,8 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Detecter le chemin du backend
-BACKEND_PATH="$(dirname "$SCRIPT_DIR")/wasteless"
-if [ ! -d "$BACKEND_PATH" ]; then
-    BACKEND_PATH="$(dirname "$SCRIPT_DIR")/wasteless-backend"
-fi
+# Detecter le chemin du backend (dossier parent de ui/)
+BACKEND_PATH="$(dirname "$SCRIPT_DIR")"
 
 # =============================================================================
 # VERIFICATION DES PREREQUIS
@@ -375,9 +372,13 @@ fi
 if [ -n "$SHELL_RC" ]; then
     ALIAS_LINE="alias wasteless='$SCRIPT_DIR/start.sh'"
 
-    # Check if alias already exists
-    if grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
+    # Check if alias already exists and points to the correct path
+    if grep -q "alias wasteless='$SCRIPT_DIR/start.sh'" "$SHELL_RC" 2>/dev/null; then
         print_step "Alias 'wasteless' deja present dans $SHELL_RC"
+    elif grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
+        # Update stale alias
+        sed -i '' "s|alias wasteless=.*|$ALIAS_LINE|" "$SHELL_RC"
+        print_step "Alias 'wasteless' mis a jour dans $SHELL_RC"
     else
         echo "" >> "$SHELL_RC"
         echo "# WasteLess CLI" >> "$SHELL_RC"
