@@ -109,7 +109,7 @@ echo ""
 # Background watcher: polls until server responds, then opens browser
 (
     i=0
-    while [ $i -lt 30 ]; do
+    while [ $i -lt 120 ]; do
         sleep 1
         if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
             printf "\n  \033[0;32m✅ Ready → http://localhost:%s\033[0m\n\n" "$PORT"
@@ -121,8 +121,11 @@ echo ""
             exit 0
         fi
         i=$((i + 1))
+        if [ $i -eq 30 ]; then
+            printf "\n  \033[1;33m  Still starting... (first run may take a minute)\033[0m\n\n"
+        fi
     done
-    printf "\n  \033[1;33m⚠  Server did not respond after 30s\033[0m\n"
+    printf "\n  \033[1;33m⚠  Server did not respond after 120s — check logs above\033[0m\n"
 ) &
 
 # Run uvicorn in foreground — logs visible normally, Ctrl+C kills it cleanly
