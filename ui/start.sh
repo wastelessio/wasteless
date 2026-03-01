@@ -83,14 +83,23 @@ fi
 # Load environment
 source .env
 
-# Get port
-PORT="${STREAMLIT_SERVER_PORT:-8888}"
+# Get port (WASTELESS_PORT env var overrides .env setting)
+PORT="${WASTELESS_PORT:-${STREAMLIT_SERVER_PORT:-8888}}"
 
 # Check if port is in use
 if lsof -ti:$PORT > /dev/null 2>&1; then
-    echo -e "${YELLOW}Port $PORT is in use. Stopping existing process...${NC}"
-    lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
-    sleep 1
+    PID=$(lsof -ti:$PORT | head -1)
+    PROC=$(ps -p "$PID" -o comm= 2>/dev/null || echo "unknown")
+    if echo "$PROC" | grep -qE "uvicorn|python"; then
+        echo -e "${GREEN}WasteLess is already running on http://localhost:$PORT${NC}"
+        echo "Open your browser at: http://localhost:$PORT"
+        exit 0
+    else
+        echo -e "${YELLOW}Port $PORT is already in use by '$PROC' (PID $PID).${NC}"
+        echo "To use a different port:"
+        echo "  WASTELESS_PORT=8889 wasteless"
+        exit 1
+    fi
 fi
 
 echo ""

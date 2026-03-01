@@ -366,6 +366,8 @@ ALIAS_LINE="alias wasteless='$UI_DIR/start.sh'"
 SHELL_RC=""
 if [ -f "$HOME/.zshrc" ]; then
     SHELL_RC="$HOME/.zshrc"
+elif [ -f "$HOME/.bash_profile" ]; then
+    SHELL_RC="$HOME/.bash_profile"
 elif [ -f "$HOME/.bashrc" ]; then
     SHELL_RC="$HOME/.bashrc"
 fi
@@ -439,7 +441,8 @@ echo -e "  ${CYAN}1. Rechargez votre shell:${NC}"
 if [ -n "$SHELL_RC" ]; then
     echo "     source $SHELL_RC"
 else
-    echo "     Ouvrez un nouveau terminal"
+    echo "     Ouvrez un nouveau terminal (shell non detecte)"
+    echo "     Ou ajoutez manuellement : alias wasteless='$(pwd)/ui/start.sh'"
 fi
 echo ""
 echo -e "  ${CYAN}2. Lancez l'interface:${NC}"
