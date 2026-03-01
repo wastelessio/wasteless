@@ -103,76 +103,30 @@ if lsof -ti:$PORT > /dev/null 2>&1; then
 fi
 
 echo ""
-echo -e "  ${YELLOW}Starting server...${NC}"
+echo -e "  ${YELLOW}Starting server... (Press Ctrl+C to stop)${NC}"
 echo ""
 
-LOG_FILE="/tmp/wasteless_${PORT}.log"
+# Background watcher: polls until server responds, then opens browser
+(
+    i=0
+    while [ $i -lt 30 ]; do
+        sleep 1
+        if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
+            printf "\n  \033[0;32m✅ Ready → http://localhost:%s\033[0m\n\n" "$PORT"
+            if command -v open &>/dev/null; then
+                open "http://localhost:$PORT"
+            elif command -v xdg-open &>/dev/null; then
+                xdg-open "http://localhost:$PORT" &>/dev/null
+            fi
+            exit 0
+        fi
+        i=$((i + 1))
+    done
+    printf "\n  \033[1;33m⚠  Server did not respond after 30s\033[0m\n"
+) &
 
-# Force Python unbuffered output so logs appear in file immediately (not TTY)
-export PYTHONUNBUFFERED=1
-
-# Start uvicorn in background
-uvicorn main:app --host 0.0.0.0 --port $PORT --reload \
+# Run uvicorn in foreground — logs visible normally, Ctrl+C kills it cleanly
+exec uvicorn main:app --host 0.0.0.0 --port $PORT --reload \
     --reload-exclude 'venv/**' \
     --reload-exclude '*.pyc' \
-    --reload-exclude '__pycache__/**' > "$LOG_FILE" 2>&1 &
-UVICORN_PID=$!
-
-# Cleanup on exit (Ctrl+C or normal exit)
-cleanup() {
-    printf "\r                                          \r"
-    kill $UVICORN_PID 2>/dev/null
-    kill $TAIL_PID 2>/dev/null
-    rm -f "$LOG_FILE"
-}
-trap cleanup EXIT INT TERM
-
-# Spinner (ASCII — safe on macOS bash 3.2)
-SPINNER=('|' '/' '-' '\')
-MAX_WAIT=30
-i=0
-READY=0
-while [ $i -lt $MAX_WAIT ]; do
-    if ! kill -0 $UVICORN_PID 2>/dev/null; then
-        printf "\r                                          \r"
-        echo -e "  \033[0;31m✗ Server failed to start. Logs:\033[0m"
-        cat "$LOG_FILE"
-        exit 1
-    fi
-    if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
-        READY=1
-        break
-    fi
-    SPIN_CHAR="${SPINNER[$((i % 4))]}"
-    printf "\r  %s  Starting... (%ds)" "$SPIN_CHAR" "$i"
-    sleep 1
-    i=$((i + 1))
-done
-
-printf "\r                                          \r"
-
-if [ $READY -eq 0 ]; then
-    echo -e "  \033[0;31m✗ Server did not respond after ${MAX_WAIT}s. Logs:\033[0m"
-    cat "$LOG_FILE"
-    exit 1
-fi
-
-echo -e "  ${GREEN}✅ Ready → http://localhost:$PORT${NC}"
-echo ""
-
-# Auto-open browser
-if command -v open &>/dev/null; then
-    open "http://localhost:$PORT"
-elif command -v xdg-open &>/dev/null; then
-    xdg-open "http://localhost:$PORT" &>/dev/null &
-fi
-
-echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop."
-echo ""
-
-# Stream uvicorn logs to terminal
-tail -f "$LOG_FILE" &
-TAIL_PID=$!
-
-# Wait for uvicorn (returns when killed or crashes)
-wait $UVICORN_PID || true
+    --reload-exclude '__pycache__/**'
