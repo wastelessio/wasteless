@@ -103,11 +103,73 @@ if lsof -ti:$PORT > /dev/null 2>&1; then
 fi
 
 echo ""
-echo -e "${GREEN}Starting WasteLess UI on http://localhost:$PORT${NC}"
+echo -e "  ${YELLOW}Starting server...${NC}"
 echo ""
 
-# Run with uvicorn (hot reload on source files only, excluding venv)
-exec uvicorn main:app --host 0.0.0.0 --port $PORT --reload \
+LOG_FILE="/tmp/wasteless_${PORT}.log"
+
+# Start uvicorn in background (logs buffered during startup)
+uvicorn main:app --host 0.0.0.0 --port $PORT --reload \
     --reload-exclude 'venv/**' \
     --reload-exclude '*.pyc' \
-    --reload-exclude '__pycache__/**'
+    --reload-exclude '__pycache__/**' > "$LOG_FILE" 2>&1 &
+UVICORN_PID=$!
+
+# Cleanup on exit (Ctrl+C or normal exit)
+cleanup() {
+    printf "\r                                          \r"
+    kill $UVICORN_PID 2>/dev/null
+    kill $TAIL_PID 2>/dev/null
+    rm -f "$LOG_FILE"
+}
+trap cleanup EXIT INT TERM
+
+# Spinner (ASCII — safe on macOS bash 3.2)
+SPINNER=('|' '/' '-' '\')
+MAX_WAIT=30
+i=0
+READY=0
+while [ $i -lt $MAX_WAIT ]; do
+    if ! kill -0 $UVICORN_PID 2>/dev/null; then
+        printf "\r                                          \r"
+        echo -e "  \033[0;31m✗ Server failed to start. Logs:\033[0m"
+        cat "$LOG_FILE"
+        exit 1
+    fi
+    if curl -sf "http://localhost:$PORT/" > /dev/null 2>&1; then
+        READY=1
+        break
+    fi
+    SPIN_CHAR="${SPINNER[$((i % 4))]}"
+    printf "\r  %s  Starting... (%ds)" "$SPIN_CHAR" "$i"
+    sleep 1
+    i=$((i + 1))
+done
+
+printf "\r                                          \r"
+
+if [ $READY -eq 0 ]; then
+    echo -e "  \033[0;31m✗ Server did not respond after ${MAX_WAIT}s. Logs:\033[0m"
+    cat "$LOG_FILE"
+    exit 1
+fi
+
+echo -e "  ${GREEN}✅ Ready → http://localhost:$PORT${NC}"
+echo ""
+
+# Auto-open browser
+if command -v open &>/dev/null; then
+    open "http://localhost:$PORT"
+elif command -v xdg-open &>/dev/null; then
+    xdg-open "http://localhost:$PORT" &>/dev/null &
+fi
+
+echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop."
+echo ""
+
+# Stream uvicorn logs to terminal
+tail -f "$LOG_FILE" &
+TAIL_PID=$!
+
+# Wait for uvicorn (returns when killed or crashes)
+wait $UVICORN_PID || true
