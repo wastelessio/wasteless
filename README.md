@@ -16,19 +16,21 @@ Open-source cloud cost optimization. Detect idle EC2 instances. Remediate with o
 ```bash
 git clone https://github.com/wastelessio/wasteless.git
 cd wasteless
-docker-compose up -d
+./install.sh          # Installs everything (backend + UI + DB)
 
-cp .env.template .env          # Edit with your DB credentials
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-
-python src/collectors/aws_cloudwatch.py   # Collect metrics
-python src/detectors/ec2_idle.py          # Detect waste
-
-cd ui && ./install.sh && ./start.sh       # Start web UI
+source ~/.zshrc
+wasteless             # Start the web UI
 ```
 
 Open http://localhost:8888
+
+Then collect data and detect waste:
+
+```bash
+source venv/bin/activate
+python3 src/collectors/aws_cloudwatch.py   # Collect metrics
+python3 src/detectors/ec2_idle.py          # Detect waste
+```
 
 ---
 
@@ -83,7 +85,7 @@ wasteless/
 ├── sql/                    # Database schema + migrations
 ├── config/
 │   └── remediation.yaml   # Safeguards and policies
-├── docker-compose.yml      # PostgreSQL + Metabase
+├── docker-compose.yml      # PostgreSQL (+ Metabase optionnel)
 └── requirements.txt
 ```
 
@@ -213,7 +215,7 @@ Before executing any action, Wasteless validates 7 conditions:
 python tests/test_end_to_end.py
 
 # UI hot reload
-cd ui && uvicorn main:app --reload --port 8888
+cd ui && ./start.sh
 
 # UI tests
 cd ui && python run_tests.py
