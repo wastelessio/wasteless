@@ -136,9 +136,10 @@ _logs() {
 # status
 # ---------------------------------------------------------------------------
 _status() {
-    PORT="${WASTELESS_PORT:-8888}"
     if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
         PID=$(cat "$PID_FILE")
+        PORT=$(lsof -p "$PID" -i -a 2>/dev/null | awk '/LISTEN/{match($9,/:([0-9]+)/,a); if(a[1]) print a[1]}' | head -1)
+        PORT="${PORT:-${WASTELESS_PORT:-8888}}"
         echo -e "${GREEN}Running${NC} — PID $PID → http://localhost:$PORT"
     else
         echo "Not running"
