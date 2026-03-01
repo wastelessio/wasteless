@@ -360,9 +360,10 @@ else
     print_step "Configuration UI existante conservee"
 fi
 
-# Alias wasteless
-UI_DIR="$(pwd)/ui"
-ALIAS_LINE="alias wasteless='$UI_DIR/start.sh'"
+# Alias wasteless → pointe vers wasteless.sh (CLI racine)
+chmod +x "$(pwd)/wasteless.sh"
+WASTELESS_CLI="$(pwd)/wasteless.sh"
+ALIAS_LINE="alias wasteless='$WASTELESS_CLI'"
 SHELL_RC=""
 if [ -f "$HOME/.zshrc" ]; then
     SHELL_RC="$HOME/.zshrc"
@@ -373,7 +374,7 @@ elif [ -f "$HOME/.bashrc" ]; then
 fi
 
 if [ -n "$SHELL_RC" ]; then
-    if grep -q "alias wasteless='$UI_DIR/start.sh'" "$SHELL_RC" 2>/dev/null; then
+    if grep -q "alias wasteless='$WASTELESS_CLI'" "$SHELL_RC" 2>/dev/null; then
         print_step "Alias 'wasteless' deja present"
     elif grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
         sed -i '' "s|alias wasteless=.*|$ALIAS_LINE|" "$SHELL_RC"
@@ -386,7 +387,7 @@ if [ -n "$SHELL_RC" ]; then
     fi
 else
     print_warning "Shell non detecte. Ajoutez manuellement:"
-    echo "  alias wasteless='$(pwd)/ui/start.sh'"
+    echo "  alias wasteless='$(pwd)/wasteless.sh'"
 fi
 
 # =============================================================================
@@ -451,14 +452,10 @@ echo "     -> http://localhost:8888"
 echo ""
 echo -e "${BOLD}Prochaines etapes:${NC}"
 echo ""
-echo -e "  1. ${CYAN}Collecter les metriques AWS:${NC}"
-echo "     source venv/bin/activate"
-echo "     python3 src/collectors/aws_cloudwatch.py"
+echo -e "  1. ${CYAN}Collecter les metriques et detecter le gaspillage:${NC}"
+echo "     wasteless collect"
 echo ""
-echo -e "  2. ${CYAN}Detecter le gaspillage:${NC}"
-echo "     python3 src/detectors/ec2_idle.py"
-echo ""
-echo -e "  3. ${CYAN}Voir les recommandations:${NC}"
+echo -e "  2. ${CYAN}Voir les recommandations:${NC}"
 echo "     -> http://localhost:8888/recommendations"
 echo ""
 echo -e "${BOLD}Pages disponibles (http://localhost:8888):${NC}"
