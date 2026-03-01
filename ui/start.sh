@@ -108,7 +108,10 @@ echo ""
 
 LOG_FILE="/tmp/wasteless_${PORT}.log"
 
-# Start uvicorn in background (logs buffered during startup)
+# Force Python unbuffered output so logs appear in file immediately (not TTY)
+export PYTHONUNBUFFERED=1
+
+# Start uvicorn in background
 uvicorn main:app --host 0.0.0.0 --port $PORT --reload \
     --reload-exclude 'venv/**' \
     --reload-exclude '*.pyc' \
@@ -136,7 +139,7 @@ while [ $i -lt $MAX_WAIT ]; do
         cat "$LOG_FILE"
         exit 1
     fi
-    if curl -sf "http://localhost:$PORT/" > /dev/null 2>&1; then
+    if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
         READY=1
         break
     fi
