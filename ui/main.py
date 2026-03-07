@@ -491,85 +491,63 @@ async def settings(request: Request, conn=Depends(get_db)):
     })
 
 
-CLOUD_REGIONS = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
-
-
 @app.get("/cloud-resources", response_class=HTMLResponse)
 async def cloud_resources(
     request: Request,
     state_filter: str = Query("all"),
     region_filter: str = Query("all")
 ):
-    """Cloud resources inventory page — renders instantly, data loaded via AJAX."""
-    return templates.TemplateResponse("cloud_resources.html", {
-        "request": request,
-        "state_filter": state_filter,
-        "region_filter": region_filter,
-        "regions": CLOUD_REGIONS,
-    })
+    """Cloud resources inventory page - shows all EC2 instances."""
+    import boto3
 
+    regions = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+    instances = []
 
-@app.get("/api/cloud-resources")
-async def api_cloud_resources(
-    state_filter: str = Query("all"),
-    region_filter: str = Query("all")
-):
-    """JSON endpoint — fetches EC2 instances across regions in parallel."""
-    try:
-        import boto3
-    except ImportError:
-        raise HTTPException(status_code=500, detail="boto3 not installed in UI venv: run pip install boto3")
-
-    def _fetch_region(region):
+    for region in regions:
         try:
             ec2 = boto3.client('ec2', region_name=region)
             response = ec2.describe_instances()
-            result = []
             for reservation in response.get('Reservations', []):
                 for instance in reservation.get('Instances', []):
-                    name = next(
-                        (t['Value'] for t in instance.get('Tags', []) if t['Key'] == 'Name'),
-                        '-'
-                    )
-                    launch = instance.get('LaunchTime')
-                    result.append({
+                    # Extract Name tag
+                    name = ''
+                    for tag in instance.get('Tags', []):
+                        if tag['Key'] == 'Name':
+                            name = tag['Value']
+                            break
+
+                    instances.append({
                         'instance_id': instance['InstanceId'],
-                        'name': name,
+                        'name': name or '-',
                         'type': instance['InstanceType'],
                         'state': instance['State']['Name'],
                         'region': region,
-                        'launch_time': launch.strftime('%Y-%m-%d %H:%M') if launch else '-',
+                        'launch_time': instance.get('LaunchTime'),
                         'public_ip': instance.get('PublicIpAddress', '-'),
-                        'private_ip': instance.get('PrivateIpAddress', '-'),
+                        'private_ip': instance.get('PrivateIpAddress', '-')
                     })
-            return result
         except Exception as e:
             print(f"Error fetching instances from {region}: {e}")
-            return []
 
-    try:
-        with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS)) as executor:
-            results = list(executor.map(_fetch_region, CLOUD_REGIONS))
+    # Apply filters
+    if state_filter != 'all':
+        instances = [i for i in instances if i['state'] == state_filter]
+    if region_filter != 'all':
+        instances = [i for i in instances if i['region'] == region_filter]
 
-        instances = [inst for region_list in results for inst in region_list]
+    # Sort by state (running first) then name
+    instances.sort(key=lambda x: (x['state'] != 'running', x['name']))
 
-        if state_filter != 'all':
-            instances = [i for i in instances if i['state'] == state_filter]
-        if region_filter != 'all':
-            instances = [i for i in instances if i['region'] == region_filter]
-
-        instances.sort(key=lambda x: (x['state'] != 'running', x['name']))
-
-        return {
-            "instances": instances,
-            "total_count": len(instances),
-            "running_count": sum(1 for i in instances if i['state'] == 'running'),
-            "stopped_count": sum(1 for i in instances if i['state'] == 'stopped'),
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    return templates.TemplateResponse("cloud_resources.html", {
+        "request": request,
+        "instances": instances,
+        "state_filter": state_filter,
+        "region_filter": region_filter,
+        "regions": regions,
+        "total_count": len(instances),
+        "running_count": len([i for i in instances if i['state'] == 'running']),
+        "stopped_count": len([i for i in instances if i['state'] == 'stopped'])
+    })
 
 
 # =============================================================================
