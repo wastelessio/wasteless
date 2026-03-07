@@ -76,7 +76,7 @@ cat << "EOF"
     FastAPI Dashboard for Cloud Cost Optimization
 EOF
 echo -e "${NC}"
-echo -e "${BOLD}Version 2.0 - Installation automatique${NC}"
+echo -e "${BOLD}Version 1.0 - Installation automatique${NC}"
 echo ""
 
 # =============================================================================
@@ -116,9 +116,8 @@ fi
 if [ -d "$BACKEND_PATH" ]; then
     print_step "Backend WasteLess detecte: $BACKEND_PATH"
 else
-    print_error "Backend WasteLess non trouve"
-    print_info "Clonez le backend dans: $(dirname "$SCRIPT_DIR")/wasteless"
-    print_info "  git clone https://github.com/wastelessio/wasteless.git ../wasteless"
+    print_error "Backend WasteLess non trouve (ce script doit etre execute depuis ui/ dans le repo wasteless)"
+    print_info "Utilisez install.sh a la racine du projet: ./install.sh"
     MISSING_DEPS=1
 fi
 
@@ -369,14 +368,14 @@ elif [ -n "$BASH_VERSION" ] || [ -f "$HOME/.bashrc" ]; then
     SHELL_RC="$HOME/.bashrc"
 fi
 
-if [ -n "$SHELL_RC" ]; then
-    ALIAS_LINE="alias wasteless='$SCRIPT_DIR/start.sh'"
+# Alias pointe vers wasteless.sh (CLI racine), pas ui/start.sh
+WASTELESS_CLI="$(dirname "$SCRIPT_DIR")/wasteless.sh"
+ALIAS_LINE="alias wasteless='$WASTELESS_CLI'"
 
-    # Check if alias already exists and points to the correct path
-    if grep -q "alias wasteless='$SCRIPT_DIR/start.sh'" "$SHELL_RC" 2>/dev/null; then
+if [ -n "$SHELL_RC" ]; then
+    if grep -q "alias wasteless='$WASTELESS_CLI'" "$SHELL_RC" 2>/dev/null; then
         print_step "Alias 'wasteless' deja present dans $SHELL_RC"
     elif grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
-        # Update stale alias
         sed -i '' "s|alias wasteless=.*|$ALIAS_LINE|" "$SHELL_RC"
         print_step "Alias 'wasteless' mis a jour dans $SHELL_RC"
     else
@@ -387,7 +386,7 @@ if [ -n "$SHELL_RC" ]; then
     fi
 else
     print_warning "Shell non detecte. Ajoutez manuellement:"
-    echo "  alias wasteless='$SCRIPT_DIR/start.sh'"
+    echo "  alias wasteless='$WASTELESS_CLI'"
 fi
 
 # =============================================================================
