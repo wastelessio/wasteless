@@ -59,6 +59,12 @@
     <button class="tab-btn" id="tab-vpcs" onclick="switchTab('vpcs')">
         VPCs <span class="tab-count">{{ vpc_count }}</span>
     </button>
+    <button class="tab-btn" id="tab-snapshots" onclick="switchTab('snapshots')">
+        Snapshots <span class="tab-count">{{ snap_count }}</span>
+    </button>
+    <button class="tab-btn" id="tab-s3" onclick="switchTab('s3')">
+        S3 Buckets <span class="tab-count">{{ s3_count }}</span>
+    </button>
 </div>
 
 <!-- Filters -->
@@ -297,14 +303,103 @@
 {% endif %}
 </div>
 
+<!-- ===== TAB: Snapshots ===== -->
+<div id="panel-snapshots" style="display:none">
+{% if snapshots %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Snapshot ID</th>
+                    <th style="padding: 0.5rem;">Description</th>
+                    <th style="padding: 0.5rem;">Volume ID</th>
+                    <th style="padding: 0.5rem;">Size</th>
+                    <th style="padding: 0.5rem;">State</th>
+                    <th style="padding: 0.5rem;">Date</th>
+                    <th style="padding: 0.5rem;">Encrypted</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for snap in snapshots %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ snap.snapshot_id }}</code></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.description[:40] }}{% if snap.description|length > 40 %}…{% endif %}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.volume_id != '-' %}<code style="font-size: 0.75rem;">{{ snap.volume_id }}</code>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.size_gb }} GiB</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.state == 'completed' %}<span class="badge badge-success">completed</span>
+                        {% elif snap.state == 'pending' %}<span class="badge badge-info">pending</span>
+                        {% else %}<span class="badge badge-danger">{{ snap.state }}</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.start_time %}<span style="font-size: 0.8rem;">{{ snap.start_time.strftime('%Y-%m-%d') }}</span>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if snap.encrypted %}<span class="badge badge-success">yes</span>
+                        {% else %}<span class="badge badge-danger">no</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ snap.region }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No snapshots found</p>
+</div>
+{% endif %}
+</div>
+
+<!-- ===== TAB: S3 Buckets ===== -->
+<div id="panel-s3" style="display:none">
+{% if buckets %}
+<div class="card" style="padding: 0.75rem;">
+    <div class="table-container">
+        <table style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="padding: 0.5rem;">Bucket Name</th>
+                    <th style="padding: 0.5rem;">Region</th>
+                    <th style="padding: 0.5rem;">Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bucket in buckets %}
+                <tr>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-weight: 500;">{{ bucket.name }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ bucket.region }}</span></td>
+                    <td style="padding: 0.4rem 0.5rem;">
+                        {% if bucket.created %}<span style="font-size: 0.8rem;">{{ bucket.created.strftime('%Y-%m-%d') }}</span>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="padding: 2rem; text-align: center;">
+    <p class="text-muted" style="margin: 0;">No S3 buckets found</p>
+</div>
+{% endif %}
+</div>
+
 <script>
 function switchTab(tab) {
-    ['ec2', 'volumes', 'ips', 'vpcs'].forEach(t => {
+    ['ec2', 'volumes', 'ips', 'vpcs', 'snapshots', 's3'].forEach(t => {
         document.getElementById('panel-' + t).style.display = t === tab ? '' : 'none';
         document.getElementById('tab-' + t).classList.toggle('active', t === tab);
     });
     document.getElementById('current-tab').value = tab;
-    // State filter only relevant for EC2
     document.getElementById('state-filter-group').style.display = tab === 'ec2' ? '' : 'none';
     document.getElementById('ec2-counters').style.display = tab === 'ec2' ? '' : 'none';
 }

@@ -592,26 +592,72 @@ async def cloud_resources(
             print(f"VPCs error {region}: {e}")
             return []
 
-    # Fetch all resource types across all regions in parallel (16 concurrent calls)
-    with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS) * 4) as executor:
-        ec2_futs  = [executor.submit(_fetch_ec2,     r) for r in CLOUD_REGIONS]
-        vol_futs  = [executor.submit(_fetch_volumes, r) for r in CLOUD_REGIONS]
-        ip_futs   = [executor.submit(_fetch_ips,     r) for r in CLOUD_REGIONS]
-        vpc_futs  = [executor.submit(_fetch_vpcs,    r) for r in CLOUD_REGIONS]
+    def _fetch_snapshots(region):
+        try:
+            ec2 = boto3.client('ec2', region_name=region)
+            result = []
+            for snap in ec2.describe_snapshots(OwnerIds=['self']).get('Snapshots', []):
+                start = snap.get('StartTime')
+                result.append({
+                    'snapshot_id': snap['SnapshotId'],
+                    'description': snap.get('Description') or '-',
+                    'volume_id': snap.get('VolumeId') or '-',
+                    'size_gb': snap.get('VolumeSize', 0),
+                    'state': snap['State'],
+                    'start_time': start,
+                    'encrypted': snap.get('Encrypted', False),
+                    'region': region,
+                })
+            return result
+        except Exception as e:
+            print(f"Snapshots error {region}: {e}")
+            return []
+
+    def _fetch_s3():
+        try:
+            s3 = boto3.client('s3')
+            result = []
+            for bucket in s3.list_buckets().get('Buckets', []):
+                created = bucket.get('CreationDate')
+                try:
+                    loc = s3.get_bucket_location(Bucket=bucket['Name'])
+                    region = loc.get('LocationConstraint') or 'us-east-1'
+                except Exception:
+                    region = '-'
+                result.append({
+                    'name': bucket['Name'],
+                    'created': created,
+                    'region': region,
+                })
+            return result
+        except Exception as e:
+            print(f"S3 error: {e}")
+            return []
+
+    # Fetch all resource types in parallel (snapshots per region + S3 global)
+    with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS) * 5 + 1) as executor:
+        ec2_futs  = [executor.submit(_fetch_ec2,        r) for r in CLOUD_REGIONS]
+        vol_futs  = [executor.submit(_fetch_volumes,    r) for r in CLOUD_REGIONS]
+        ip_futs   = [executor.submit(_fetch_ips,        r) for r in CLOUD_REGIONS]
+        vpc_futs  = [executor.submit(_fetch_vpcs,       r) for r in CLOUD_REGIONS]
+        snap_futs = [executor.submit(_fetch_snapshots,  r) for r in CLOUD_REGIONS]
+        s3_fut    =  executor.submit(_fetch_s3)
 
     instances = [i   for f in ec2_futs  for i   in f.result()]
     volumes   = [v   for f in vol_futs  for v   in f.result()]
     ips       = [ip  for f in ip_futs   for ip  in f.result()]
     vpcs      = [vpc for f in vpc_futs  for vpc in f.result()]
+    snapshots = [s   for f in snap_futs for s   in f.result()]
+    buckets   = s3_fut.result()
 
-    # Apply region filter to all resource types
+    # Apply region filter (S3 not filtered — global service)
     if region_filter != 'all':
         instances = [i for i in instances if i['region'] == region_filter]
         volumes   = [v for v in volumes   if v['region'] == region_filter]
         ips       = [ip for ip in ips     if ip['region'] == region_filter]
         vpcs      = [vpc for vpc in vpcs  if vpc['region'] == region_filter]
+        snapshots = [s for s in snapshots if s['region'] == region_filter]
 
-    # State filter applies only to EC2
     if state_filter != 'all':
         instances = [i for i in instances if i['state'] == state_filter]
 
@@ -619,6 +665,8 @@ async def cloud_resources(
     volumes.sort(key=lambda x: (x['state'] != 'in-use', x['region']))
     ips.sort(key=lambda x: (not x['associated'], x['region']))
     vpcs.sort(key=lambda x: (not x['is_default'], x['region']))
+    snapshots.sort(key=lambda x: x['start_time'] or '', reverse=True)
+    buckets.sort(key=lambda x: x['name'])
 
     return templates.TemplateResponse("cloud_resources.html", {
         "request": request,
@@ -627,15 +675,19 @@ async def cloud_resources(
         "volumes": volumes,
         "ips": ips,
         "vpcs": vpcs,
+        "snapshots": snapshots,
+        "buckets": buckets,
         "state_filter": state_filter,
         "region_filter": region_filter,
         "regions": CLOUD_REGIONS,
-        "ec2_count":     len(instances),
+        "ec2_count":  len(instances),
         "running_count": sum(1 for i in instances if i['state'] == 'running'),
         "stopped_count": sum(1 for i in instances if i['state'] == 'stopped'),
-        "vol_count": len(volumes),
-        "ip_count":  len(ips),
-        "vpc_count": len(vpcs),
+        "vol_count":  len(volumes),
+        "ip_count":   len(ips),
+        "vpc_count":  len(vpcs),
+        "snap_count": len(snapshots),
+        "s3_count":   len(buckets),
     })
 
 
