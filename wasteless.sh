@@ -164,7 +164,7 @@ _collect() {
     echo -e "${BOLD}WasteLess — Collect & Detect${NC}"
     echo ""
 
-    echo -e "${CYAN}[1/2]${NC} Collecting CloudWatch metrics..."
+    echo -e "${CYAN}[1/3]${NC} Collecting CloudWatch metrics..."
     if python3 src/collectors/aws_cloudwatch.py; then
         echo -e "${GREEN}[OK]${NC} Metrics collected"
     else
@@ -173,8 +173,17 @@ _collect() {
     fi
 
     echo ""
-    echo -e "${CYAN}[2/2]${NC} Detecting idle instances..."
+    echo -e "${CYAN}[2/3]${NC} Detecting idle EC2 instances..."
     if python3 src/detectors/ec2_idle.py; then
+        echo -e "${GREEN}[OK]${NC} Detection complete"
+    else
+        echo -e "${RED}[ERROR]${NC} Detector failed"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${CYAN}[3/3]${NC} Detecting orphaned EBS volumes..."
+    if python3 src/detectors/ebs_orphan.py; then
         echo -e "${GREEN}[OK]${NC} Detection complete"
     else
         echo -e "${RED}[ERROR]${NC} Detector failed"
