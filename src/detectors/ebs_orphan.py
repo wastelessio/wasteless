@@ -137,12 +137,13 @@ class EBSOrphanDetector:
                     vol['monthly_cost'],
                     0.95,  # high confidence — state=available is unambiguous
                     json.dumps({
-                        'name':      vol['name'],
-                        'size_gb':   vol['size_gb'],
-                        'vol_type':  vol['vol_type'],
-                        'az':        vol['az'],
-                        'region':    vol['region'],
-                        'encrypted': vol['encrypted'],
+                        'name':             vol['name'],
+                        'size_gb':          vol['size_gb'],
+                        'vol_type':         vol['vol_type'],
+                        'az':               vol['az'],
+                        'region':           vol['region'],
+                        'encrypted':        vol['encrypted'],
+                        'monthly_cost_eur': vol['monthly_cost'],
                     })
                 ))
                 waste_ids.append(cursor.fetchone()[0])

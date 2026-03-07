@@ -21,6 +21,7 @@
                     <option value="stop_instance" {% if type_filter == 'stop_instance' %}selected{% endif %}>Stop</option>
                     <option value="terminate_instance" {% if type_filter == 'terminate_instance' %}selected{% endif %}>Terminate</option>
                     <option value="downsize_instance" {% if type_filter == 'downsize_instance' %}selected{% endif %}>Downsize</option>
+                    <option value="delete_volume" {% if type_filter == 'delete_volume' %}selected{% endif %}>Delete Volume</option>
                 </select>
             </div>
             <div class="form-group" style="margin: 0;">
@@ -95,6 +96,8 @@
                             <span class="badge badge-warning">Stop</span>
                             {% elif rec.recommendation_type == 'terminate_instance' %}
                             <span class="badge badge-danger">Terminate</span>
+                            {% elif rec.recommendation_type == 'delete_volume' %}
+                            <span class="badge badge-danger">Delete Volume</span>
                             {% else %}
                             <span class="badge badge-info">Downsize</span>
                             {% endif %}
@@ -104,7 +107,7 @@
                         </td>
                         <td style="padding: 0.4rem 0.5rem;">{{ "%.2f"|format(current_cost) }}</td>
                         <td style="padding: 0.4rem 0.5rem;">
-                            {% if rec.recommendation_type in ['stop_instance', 'terminate_instance'] %}
+                            {% if rec.recommendation_type in ['stop_instance', 'terminate_instance', 'delete_volume'] %}
                             <span class="text-success">0.00</span>
                             {% else %}
                             <span>{{ "%.2f"|format(after_cost) }}</span>
@@ -140,7 +143,7 @@
         <p class="text-muted" style="margin-bottom: 1.25rem; font-size: 0.9rem;">Try relaxing the filters to see more results.</p>
         <a href="/recommendations" class="btn btn-outline" style="padding: 0.4rem 1rem;">Reset filters</a>
     {% else %}
-        <div style="font-size: 2rem; margin-bottom: 0.75rem;">✅</div>
+        <div style="margin-bottom: 0.75rem;"></div>
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No idle instances detected</p>
         <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Either everything looks healthy, or the collector hasn't run yet.</p>
         <div style="display: inline-block; text-align: left; background: var(--gray-100); border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.85rem;">
@@ -175,6 +178,13 @@
                 <strong>Downsize Instance</strong>
             </div>
             <p class="text-muted" style="margin: 0; line-height: 1.4;">Change to smaller type. Requires restart. Can upsize later if needed.</p>
+        </div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span class="badge badge-danger">Delete Volume</span>
+                <strong>Delete EBS Volume</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Volume not attached to any instance. Deleting it stops billing. Irreversible — snapshot it first if needed.</p>
         </div>
     </div>
 </details>
