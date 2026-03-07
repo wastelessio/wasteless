@@ -547,24 +547,29 @@ async def api_cloud_resources(
             print(f"Error fetching instances from {region}: {e}")
             return []
 
-    with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS)) as executor:
-        results = list(executor.map(_fetch_region, CLOUD_REGIONS))
+    try:
+        with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS)) as executor:
+            results = list(executor.map(_fetch_region, CLOUD_REGIONS))
 
-    instances = [inst for region_list in results for inst in region_list]
+        instances = [inst for region_list in results for inst in region_list]
 
-    if state_filter != 'all':
-        instances = [i for i in instances if i['state'] == state_filter]
-    if region_filter != 'all':
-        instances = [i for i in instances if i['region'] == region_filter]
+        if state_filter != 'all':
+            instances = [i for i in instances if i['state'] == state_filter]
+        if region_filter != 'all':
+            instances = [i for i in instances if i['region'] == region_filter]
 
-    instances.sort(key=lambda x: (x['state'] != 'running', x['name']))
+        instances.sort(key=lambda x: (x['state'] != 'running', x['name']))
 
-    return {
-        "instances": instances,
-        "total_count": len(instances),
-        "running_count": sum(1 for i in instances if i['state'] == 'running'),
-        "stopped_count": sum(1 for i in instances if i['state'] == 'stopped'),
-    }
+        return {
+            "instances": instances,
+            "total_count": len(instances),
+            "running_count": sum(1 for i in instances if i['state'] == 'running'),
+            "stopped_count": sum(1 for i in instances if i['state'] == 'stopped'),
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================
