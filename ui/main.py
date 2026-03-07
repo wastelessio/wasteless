@@ -515,7 +515,10 @@ async def api_cloud_resources(
     region_filter: str = Query("all")
 ):
     """JSON endpoint — fetches EC2 instances across regions in parallel."""
-    import boto3
+    try:
+        import boto3
+    except ImportError:
+        raise HTTPException(status_code=500, detail="boto3 not installed in UI venv: run pip install boto3")
 
     def _fetch_region(region):
         try:
@@ -545,7 +548,7 @@ async def api_cloud_resources(
             return []
 
     with ThreadPoolExecutor(max_workers=len(CLOUD_REGIONS)) as executor:
-        results = executor.map(_fetch_region, CLOUD_REGIONS)
+        results = list(executor.map(_fetch_region, CLOUD_REGIONS))
 
     instances = [inst for region_list in results for inst in region_list]
 

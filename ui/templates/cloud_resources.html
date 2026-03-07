@@ -145,6 +145,12 @@ async function loadInstances() {
         const res  = await fetch(`/api/cloud-resources?${params}`);
         const data = await res.json();
 
+        if (!res.ok) {
+            const detail = data.detail || `HTTP ${res.status}`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--danger)">Error: ${detail}</td></tr>`;
+            return;
+        }
+
         document.getElementById('total-count').textContent   = data.total_count;
         document.getElementById('running-count').textContent = data.running_count;
         document.getElementById('stopped-count').textContent = data.stopped_count;
@@ -155,7 +161,7 @@ async function loadInstances() {
             tbody.innerHTML = data.instances.map(renderRow).join('');
         }
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--danger)">Failed to load instances — check AWS credentials</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--danger)">Network error: ${err.message}</td></tr>`;
     }
 }
 
