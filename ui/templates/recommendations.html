@@ -10,20 +10,10 @@
     </button>
 </div>
 
-<!-- Filters + Summary in one row -->
+<!-- Filters + Summary -->
 <div class="card mb-1" style="padding: 0.75rem;">
     <form method="get" action="/recommendations">
         <div style="display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;">
-            <div class="form-group" style="margin: 0;">
-                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Type</label>
-                <select name="type_filter" class="form-select" style="padding: 0.4rem;" onchange="this.form.submit()">
-                    <option value="All" {% if type_filter == 'All' %}selected{% endif %}>All</option>
-                    <option value="stop_instance" {% if type_filter == 'stop_instance' %}selected{% endif %}>Stop</option>
-                    <option value="terminate_instance" {% if type_filter == 'terminate_instance' %}selected{% endif %}>Terminate</option>
-                    <option value="downsize_instance" {% if type_filter == 'downsize_instance' %}selected{% endif %}>Downsize</option>
-                    <option value="delete_volume" {% if type_filter == 'delete_volume' %}selected{% endif %}>Delete Volume</option>
-                </select>
-            </div>
             <div class="form-group" style="margin: 0;">
                 <label class="form-label" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Min Savings</label>
                 <input type="number" name="min_savings" class="form-input" style="padding: 0.4rem; width: 80px;" value="{{ min_savings }}" min="0" max="1000" step="5">
@@ -33,27 +23,37 @@
                 <input type="number" name="min_confidence" class="form-input" style="padding: 0.4rem; width: 70px;" value="{{ min_confidence }}" min="0" max="1" step="0.1">
             </div>
             <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">Apply</button>
-
             <div style="margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.85rem; align-items: center;">
                 <span><strong>{{ recommendations|length }}</strong> recommendations</span>
-                {% set total_current_cost = recommendations|selectattr('monthly_cost')|sum(attribute='monthly_cost') or 0 %}
-                <span class="text-muted">Current: <strong>{{ "%.0f"|format(total_current_cost) }}</strong> EUR/mo</span>
-                <span class="text-success">Savings: <strong>{{ "%.0f"|format(total_savings) }}</strong> EUR/mo</span>
+                <span class="text-success">Savings: <strong>{{ "%.2f"|format(total_savings) }}</strong> €/mo</span>
                 <span><strong>{{ "%.0f"|format(avg_confidence * 100) }}%</strong> conf.</span>
             </div>
         </div>
     </form>
 </div>
 
-<!-- Recommendations Table -->
-{% if recommendations %}
+<!-- Tabs -->
 <div class="card" style="padding: 0.75rem;">
+    <!-- Tab nav -->
+    <div style="display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1rem;">
+        <button id="tab-btn-ec2" onclick="switchTab('ec2')" style="padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -2px;">
+            EC2 Instances <span style="background: var(--primary); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem;">{{ ec2_recs|length }}</span>
+        </button>
+        <button id="tab-btn-ebs" onclick="switchTab('ebs')" style="padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--gray-600); border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            EBS Volumes <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem;">{{ ebs_recs|length }}</span>
+        </button>
+        <button id="tab-btn-eip" onclick="switchTab('eip')" style="padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--gray-600); border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            Elastic IPs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem;">{{ eip_recs|length }}</span>
+        </button>
+        <button id="tab-btn-snap" onclick="switchTab('snap')" style="padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--gray-600); border-bottom: 2px solid transparent; margin-bottom: -2px;">
+            Snapshots <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem;">{{ snap_recs|length }}</span>
+        </button>
+    </div>
+
     <form id="actionsForm">
-        <!-- Action buttons at top -->
+        <!-- Action buttons -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600);">0 selected</span>
-            </div>
+            <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600);">0 selected</span>
             <div style="display: flex; gap: 0.5rem;">
                 <button type="button" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem;">
                     Approve Selected
@@ -64,79 +64,242 @@
             </div>
         </div>
 
-        <div class="table-container">
-            <table style="font-size: 0.85rem;">
-                <thead>
-                    <tr>
-                        <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleAll()"></th>
-                        <th style="padding: 0.5rem;">Instance</th>
-                        <th style="padding: 0.5rem;">Type</th>
-                        <th style="padding: 0.5rem;">Action</th>
-                        <th style="padding: 0.5rem;">CPU</th>
-                        <th style="padding: 0.5rem;">Cost</th>
-                        <th style="padding: 0.5rem;">After</th>
-                        <th style="padding: 0.5rem;">Savings</th>
-                        <th style="padding: 0.5rem;">Conf.</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for rec in recommendations %}
-                    {% set current_cost = rec.monthly_cost or 0 %}
-                    {% set savings = rec.estimated_monthly_savings_eur or 0 %}
-                    {% set after_cost = current_cost - savings %}
-                    {% set savings_pct = (savings / current_cost * 100) if current_cost > 0 else 100 %}
-                    <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
-                        <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox" onclick="event.stopPropagation(); updateSelectedCount();"></td>
-                        <td style="padding: 0.4rem 0.5rem;">
-                            <code style="font-size: 0.75rem;">{{ rec.resource_id[:20] }}</code>
-                        </td>
-                        <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
-                        <td style="padding: 0.4rem 0.5rem;">
-                            {% if rec.recommendation_type == 'stop_instance' %}
-                            <span class="badge badge-warning">Stop</span>
-                            {% elif rec.recommendation_type == 'terminate_instance' %}
-                            <span class="badge badge-danger">Terminate</span>
-                            {% elif rec.recommendation_type == 'delete_volume' %}
-                            <span class="badge badge-danger">Delete Volume</span>
-                            {% else %}
-                            <span class="badge badge-info">Downsize</span>
-                            {% endif %}
-                        </td>
-                        <td style="padding: 0.4rem 0.5rem;">
-                            <span style="color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
-                        </td>
-                        <td style="padding: 0.4rem 0.5rem;">{{ "%.2f"|format(current_cost) }}</td>
-                        <td style="padding: 0.4rem 0.5rem;">
-                            {% if rec.recommendation_type in ['stop_instance', 'terminate_instance', 'delete_volume'] %}
-                            <span class="text-success">0.00</span>
-                            {% else %}
-                            <span>{{ "%.2f"|format(after_cost) }}</span>
-                            {% endif %}
-                        </td>
-                        <td style="padding: 0.4rem 0.5rem;">
-                            <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
-                                <span style="font-size: 0.7rem; color: var(--success);">({{ "%.0f"|format(savings_pct) }}%)</span>
-                            </div>
-                        </td>
-                        <td style="padding: 0.4rem 0.5rem;">
-                            <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
-                                    <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+        <!-- EC2 Tab -->
+        <div id="tab-ec2">
+            {% if ec2_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-ec2" onclick="toggleAll('ec2')"></th>
+                            <th style="padding: 0.5rem;">Instance</th>
+                            <th style="padding: 0.5rem;">Type</th>
+                            <th style="padding: 0.5rem;">Action</th>
+                            <th style="padding: 0.5rem;">Age</th>
+                            <th style="padding: 0.5rem;">CPU</th>
+                            <th style="padding: 0.5rem;">Cost</th>
+                            <th style="padding: 0.5rem;">After</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Conf.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in ec2_recs %}
+                        {% set current_cost = rec.monthly_cost or 0 %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        {% set after_cost = current_cost - savings %}
+                        {% set savings_pct = (savings / current_cost * 100) if current_cost > 0 else 100 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ec2" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id[:20] }}</code></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.instance_type or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                {% if rec.recommendation_type == 'stop_instance' %}
+                                <span class="badge badge-warning">Stop</span>
+                                {% elif rec.recommendation_type == 'terminate_instance' %}
+                                <span class="badge badge-danger">Terminate</span>
+                                {% else %}
+                                <span class="badge badge-info">Downsize</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--warning);">{% if rec.age_days is not none %}{{ rec.age_days }}d{% else %}-{% endif %}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <span style="color: {% if (rec.cpu_avg or 0) < 5 %}var(--danger){% elif (rec.cpu_avg or 0) < 20 %}var(--warning){% else %}var(--gray-600){% endif %};">{{ "%.1f"|format(rec.cpu_avg or 0) }}%</span>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">{{ "%.2f"|format(current_cost) }}</td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                {% if rec.recommendation_type in ['stop_instance', 'terminate_instance'] %}
+                                <span class="text-success">0.00</span>
+                                {% else %}
+                                <span>{{ "%.2f"|format(after_cost) }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.7rem; color: var(--success);">({{ "%.0f"|format(savings_pct) }}%)</span>
                                 </div>
-                                <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No idle EC2 instance recommendations</div>
+            {% endif %}
+        </div>
+
+        <!-- EBS Tab -->
+        <div id="tab-ebs" style="display: none;">
+            {% if ebs_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-ebs" onclick="toggleAll('ebs')"></th>
+                            <th style="padding: 0.5rem;">Volume ID</th>
+                            <th style="padding: 0.5rem;">Name</th>
+                            <th style="padding: 0.5rem;">Size</th>
+                            <th style="padding: 0.5rem;">Type</th>
+                            <th style="padding: 0.5rem;">Age</th>
+                            <th style="padding: 0.5rem;">Region</th>
+                            <th style="padding: 0.5rem;">Cost</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Conf.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in ebs_recs %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-ebs" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_name or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span class="badge badge-info" style="font-size: 0.7rem;">{{ rec.volume_type or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--warning);">{% if rec.age_days is not none %}{{ rec.age_days }}d{% else %}-{% endif %}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">{{ "%.2f"|format(savings) }}</td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.7rem; color: var(--success);">(100%)</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No orphaned EBS volume recommendations</div>
+            {% endif %}
+        </div>
+
+        <!-- Elastic IPs Tab -->
+        <div id="tab-eip" style="display: none;">
+            {% if eip_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-eip" onclick="toggleAll('eip')"></th>
+                            <th style="padding: 0.5rem;">Allocation ID</th>
+                            <th style="padding: 0.5rem;">Public IP</th>
+                            <th style="padding: 0.5rem;">Age</th>
+                            <th style="padding: 0.5rem;">Region</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Conf.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in eip_recs %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-eip" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.public_ip or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--warning);">{% if rec.age_days is not none %}{{ rec.age_days }}d{% else %}-{% endif %}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.7rem; color: var(--success);">/mo</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: var(--success);"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No unassociated Elastic IP recommendations</div>
+            {% endif %}
+        </div>
+
+        <!-- Snapshots Tab -->
+        <div id="tab-snap" style="display: none;">
+            {% if snap_recs %}
+            <div class="table-container">
+                <table style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 40px;"><input type="checkbox" id="selectAll-snap" onclick="toggleAll('snap')"></th>
+                            <th style="padding: 0.5rem;">Snapshot ID</th>
+                            <th style="padding: 0.5rem;">Description</th>
+                            <th style="padding: 0.5rem;">Size</th>
+                            <th style="padding: 0.5rem;">Age</th>
+                            <th style="padding: 0.5rem;">Region</th>
+                            <th style="padding: 0.5rem;">Cost</th>
+                            <th style="padding: 0.5rem;">Savings</th>
+                            <th style="padding: 0.5rem;">Conf.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in snap_recs %}
+                        {% set savings = rec.estimated_monthly_savings_eur or 0 %}
+                        <tr style="cursor: pointer;" onclick="toggleRow(this, event)">
+                            <td style="padding: 0.4rem 0.5rem;"><input type="checkbox" name="rec_ids" value="{{ rec.id }}" class="rec-checkbox rec-checkbox-snap" onclick="event.stopPropagation(); updateSelectedCount();"></td>
+                            <td style="padding: 0.4rem 0.5rem;"><code style="font-size: 0.75rem;">{{ rec.resource_id }}</code></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.snap_description or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem;">{{ rec.volume_size_gb or '-' }} GiB</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--warning);">{% if rec.age_days is not none %}{{ rec.age_days }}d{% else %}-{% endif %}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;"><span style="font-size: 0.8rem; color: var(--gray-600);">{{ rec.volume_region or '-' }}</span></td>
+                            <td style="padding: 0.4rem 0.5rem;">{{ "%.2f"|format(savings) }}</td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <strong class="text-success">{{ "%.2f"|format(savings) }}</strong>
+                                    <span style="font-size: 0.7rem; color: var(--success);">(100%)</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.4rem 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <div style="width: 40px; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; width: {{ (rec.confidence_score or 0) * 100 }}%; background: {% if (rec.confidence_score or 0) >= 0.9 %}var(--success){% elif (rec.confidence_score or 0) >= 0.8 %}var(--primary){% elif (rec.confidence_score or 0) >= 0.7 %}var(--warning){% else %}var(--danger){% endif %};"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">{{ "%.0f"|format((rec.confidence_score or 0) * 100) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 2rem; text-align: center; color: var(--gray-500);">No old snapshot recommendations</div>
+            {% endif %}
         </div>
     </form>
 </div>
-{% else %}
-{% set filters_active = type_filter != 'All' or min_savings > 0 or min_confidence > 0 %}
-<div class="card" style="padding: 2.5rem; text-align: center;">
+
+{% if not recommendations %}
+{% set filters_active = min_savings > 0 or min_confidence > 0 %}
+<div class="card mt-1" style="padding: 2.5rem; text-align: center;">
     {% if filters_active %}
         <div style="font-size: 2rem; margin-bottom: 0.75rem;">🔍</div>
         <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations match your filters</p>
@@ -144,7 +307,7 @@
         <a href="/recommendations" class="btn btn-outline" style="padding: 0.4rem 1rem;">Reset filters</a>
     {% else %}
         <div style="margin-bottom: 0.75rem;"></div>
-        <p style="font-weight: 600; margin-bottom: 0.25rem;">No idle instances detected</p>
+        <p style="font-weight: 600; margin-bottom: 0.25rem;">No recommendations yet</p>
         <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Either everything looks healthy, or the collector hasn't run yet.</p>
         <div style="display: inline-block; text-align: left; background: var(--gray-100); border-radius: 8px; padding: 1rem 1.5rem; font-size: 0.85rem;">
             <p style="margin: 0 0 0.5rem; font-weight: 600; color: var(--gray-700);">Run the pipeline to collect data:</p>
@@ -186,15 +349,62 @@
             </div>
             <p class="text-muted" style="margin: 0; line-height: 1.4;">Volume not attached to any instance. Deleting it stops billing. Irreversible — snapshot it first if needed.</p>
         </div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span class="badge badge-danger">Release IP</span>
+                <strong>Release Elastic IP</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Elastic IP not attached to any instance or interface. AWS bills for idle EIPs. Releasing it is immediate.</p>
+        </div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span class="badge badge-danger">Delete Snapshot</span>
+                <strong>Delete Old Snapshot</strong>
+            </div>
+            <p class="text-muted" style="margin: 0; line-height: 1.4;">Snapshot older than 90 days. Verify it's not a required backup before deleting. Irreversible.</p>
+        </div>
     </div>
 </details>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    function toggleAll() {
-        const checkboxes = document.querySelectorAll('.rec-checkbox');
-        const selectAll = document.getElementById('selectAll');
+    let currentTab = 'ec2';
+
+    const ALL_TABS = ['ec2', 'ebs', 'eip', 'snap'];
+
+    function switchTab(tab) {
+        currentTab = tab;
+        // Show/hide panels
+        ALL_TABS.forEach(t => {
+            const panel = document.getElementById('tab-' + t);
+            if (panel) panel.style.display = t === tab ? '' : 'none';
+        });
+        // Update tab button styles
+        ALL_TABS.forEach(t => {
+            const btn = document.getElementById('tab-btn-' + t);
+            if (!btn) return;
+            if (t === tab) {
+                btn.style.color = 'var(--primary)';
+                btn.style.borderBottom = '2px solid var(--primary)';
+                const badge = btn.querySelector('span');
+                if (badge) badge.style.background = 'var(--primary)';
+            } else {
+                btn.style.color = 'var(--gray-600)';
+                btn.style.borderBottom = '2px solid transparent';
+                const badge = btn.querySelector('span');
+                if (badge) badge.style.background = 'var(--gray-400)';
+                // Uncheck selectAll of inactive tab
+                const sa = document.getElementById('selectAll-' + t);
+                if (sa) sa.checked = false;
+            }
+        });
+        updateSelectedCount();
+    }
+
+    function toggleAll(tab) {
+        const checkboxes = document.querySelectorAll('.rec-checkbox-' + tab);
+        const selectAll = document.getElementById('selectAll-' + tab);
         checkboxes.forEach(cb => cb.checked = selectAll.checked);
         updateSelectedCount();
     }
@@ -264,11 +474,12 @@
             updateSelectedCount();
             updateSummary();
 
-            // Show empty message if no rows left
-            const remainingRows = document.querySelectorAll('.rec-checkbox').length;
+            // Show empty message if no rows left in current tab
+            const tabEl = document.getElementById('tab-' + currentTab);
+            const remainingRows = tabEl.querySelectorAll('.rec-checkbox').length;
             if (remainingRows === 0) {
-                document.querySelector('.table-container').innerHTML =
-                    '<div style="padding: 2rem; text-align: center;"><p class="text-muted">No recommendations match your filters</p></div>';
+                const tc = tabEl.querySelector('.table-container');
+                if (tc) tc.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--gray-500);">No more recommendations in this tab</div>';
             }
 
             // Show success message
@@ -279,7 +490,6 @@
     }
 
     function updateSummary() {
-        // Update the recommendation count in summary
         const count = document.querySelectorAll('.rec-checkbox').length;
         const countSpan = document.querySelector('.card.mb-1 strong');
         if (countSpan) countSpan.textContent = count;

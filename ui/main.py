@@ -60,12 +60,13 @@ def sync_aws_job():
         conn = psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
         cursor = conn.cursor()
 
-        # Get pending recommendations
+        # Get pending recommendations — EC2 instances only
         cursor.execute("""
             SELECT DISTINCT w.resource_id
             FROM recommendations r
             JOIN waste_detected w ON r.waste_id = w.id
             WHERE r.status = 'pending'
+              AND w.resource_type = 'ec2_instance'
         """)
         pending_instances = [row['resource_id'] for row in cursor.fetchall()]
 
@@ -306,7 +307,7 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     """)
     kpis = cursor.fetchone()
 
-    # Waste trend (last 90 days for better historical context)
+    # Waste trend (last 90 days)
     cursor.execute("""
         SELECT DATE(created_at) as date, COUNT(*) as count, SUM(monthly_waste_eur) as total_waste
         FROM waste_detected
@@ -325,13 +326,23 @@ async def dashboard(request: Request, conn=Depends(get_db)):
     """)
     rec_by_type = cursor.fetchall()
 
+    # Waste cost by resource type
+    cursor.execute("""
+        SELECT resource_type, SUM(monthly_waste_eur) as total_eur
+        FROM waste_detected
+        GROUP BY resource_type
+        ORDER BY total_eur DESC
+    """)
+    waste_by_resource = cursor.fetchall()
+
     cursor.close()
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "kpis": kpis,
         "waste_trend": waste_trend,
-        "rec_by_type": rec_by_type
+        "rec_by_type": rec_by_type,
+        "waste_by_resource": waste_by_resource
     })
 
 
@@ -352,6 +363,7 @@ async def recommendations(
             r.id,
             r.recommendation_type,
             w.resource_id,
+            w.resource_type,
             r.estimated_monthly_savings_eur,
             w.confidence_score,
             r.action_required,
@@ -360,7 +372,14 @@ async def recommendations(
             w.metadata->>'instance_type' as instance_type,
             (w.metadata->>'cpu_avg_7d')::numeric as cpu_avg,
             (w.metadata->>'monthly_cost_eur')::numeric as monthly_cost,
-            w.metadata->>'instance_state' as instance_state
+            w.metadata->>'instance_state' as instance_state,
+            w.metadata->>'size_gb' as volume_size_gb,
+            w.metadata->>'vol_type' as volume_type,
+            COALESCE(w.metadata->>'region', w.metadata->>'az') as volume_region,
+            w.metadata->>'name' as volume_name,
+            w.metadata->>'public_ip' as public_ip,
+            COALESCE((w.metadata->>'age_days')::integer, CURRENT_DATE - w.detection_date) as age_days,
+            w.metadata->>'description' as snap_description
         FROM recommendations r
         JOIN waste_detected w ON r.waste_id = w.id
         WHERE r.status = 'pending'
@@ -388,11 +407,20 @@ async def recommendations(
     total_savings = sum(r['estimated_monthly_savings_eur'] or 0 for r in recommendations)
     avg_confidence = sum(r['confidence_score'] or 0 for r in recommendations) / len(recommendations) if recommendations else 0
 
+    ec2_recs  = [r for r in recommendations if r['resource_type'] == 'ec2_instance']
+    ebs_recs  = [r for r in recommendations if r['resource_type'] == 'ebs_volume']
+    eip_recs  = [r for r in recommendations if r['resource_type'] == 'elastic_ip']
+    snap_recs = [r for r in recommendations if r['resource_type'] == 'ebs_snapshot']
+
     cursor.close()
 
     return templates.TemplateResponse("recommendations.html", {
         "request": request,
         "recommendations": recommendations,
+        "ec2_recs": ec2_recs,
+        "ebs_recs": ebs_recs,
+        "eip_recs": eip_recs,
+        "snap_recs": snap_recs,
         "total_savings": total_savings,
         "avg_confidence": avg_confidence,
         "type_filter": type_filter,
