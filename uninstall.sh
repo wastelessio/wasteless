@@ -77,6 +77,17 @@ read -r
 print_header "1/5 - Arret de WasteLess"
 
 PID_FILE="$HOME/.wasteless.pid"
+COLLECTOR_PID_FILE="$HOME/.wasteless-collector.pid"
+
+# Arreter le collector loop
+if [ -f "$COLLECTOR_PID_FILE" ]; then
+    CPID=$(cat "$COLLECTOR_PID_FILE")
+    kill "$CPID" 2>/dev/null || true
+    rm -f "$COLLECTOR_PID_FILE"
+    print_step "Collector automatique arrete (PID $CPID)"
+else
+    print_skip "Aucun collector automatique en cours"
+fi
 
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
@@ -176,6 +187,7 @@ CRON_MARKERS=(
     "# Wasteless: Automated CloudWatch metrics collection"
     "# Wasteless: Automated waste detection"
     "# Wasteless: Automated cleanup of orphaned recommendations"
+    "# wasteless-collect"
 )
 
 CRONTAB_CONTENT=$(crontab -l 2>/dev/null || true)

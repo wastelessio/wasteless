@@ -21,6 +21,8 @@ NC='\033[0m'
 
 PID_FILE="$HOME/.wasteless.pid"
 LOG_FILE="$HOME/.wasteless.log"
+COLLECTOR_PID_FILE="$HOME/.wasteless-collector.pid"
+COLLECT_LOCK_FILE="$HOME/.wasteless-collect.lock"
 
 CMD="${1:-start}"
 
@@ -61,6 +63,8 @@ _start() {
         echo "To use a different port: WASTELESS_PORT=8889 wasteless"
         exit 1
     fi
+
+    _ensure_cron
 
     echo ""
     echo -e "  ${YELLOW}Starting WasteLess in background...${NC}"
@@ -106,6 +110,14 @@ _start() {
 # stop
 # ---------------------------------------------------------------------------
 _stop() {
+    # Stop collector loop
+    if [ -f "$COLLECTOR_PID_FILE" ]; then
+        CPID=$(cat "$COLLECTOR_PID_FILE")
+        kill "$CPID" 2>/dev/null
+        rm -f "$COLLECTOR_PID_FILE"
+    fi
+    rm -f "$COLLECT_LOCK_FILE"
+
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
         if kill -0 "$PID" 2>/dev/null; then
@@ -151,6 +163,16 @@ _status() {
 # collect
 # ---------------------------------------------------------------------------
 _collect() {
+    # Prevent concurrent runs
+    if [ -f "$COLLECT_LOCK_FILE" ]; then
+        LOCK_PID=$(cat "$COLLECT_LOCK_FILE" 2>/dev/null)
+        if kill -0 "$LOCK_PID" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    echo $$ > "$COLLECT_LOCK_FILE"
+    trap 'rm -f "$COLLECT_LOCK_FILE"' EXIT INT TERM
+
     cd "$SCRIPT_DIR"
 
     if [ ! -d "venv" ]; then
@@ -164,7 +186,7 @@ _collect() {
     echo -e "${BOLD}WasteLess — Collect & Detect${NC}"
     echo ""
 
-    echo -e "${CYAN}[1/3]${NC} Collecting CloudWatch metrics..."
+    echo -e "${CYAN}[1/6]${NC} Collecting CloudWatch metrics..."
     if python3 src/collectors/aws_cloudwatch.py; then
         echo -e "${GREEN}[OK]${NC} Metrics collected"
     else
@@ -173,7 +195,7 @@ _collect() {
     fi
 
     echo ""
-    echo -e "${CYAN}[2/3]${NC} Detecting idle EC2 instances..."
+    echo -e "${CYAN}[2/6]${NC} Detecting idle EC2 instances..."
     if python3 src/detectors/ec2_idle.py; then
         echo -e "${GREEN}[OK]${NC} Detection complete"
     else
@@ -182,8 +204,35 @@ _collect() {
     fi
 
     echo ""
-    echo -e "${CYAN}[3/3]${NC} Detecting orphaned EBS volumes..."
+    echo -e "${CYAN}[3/6]${NC} Detecting stopped EC2 instances..."
+    if python3 src/detectors/ec2_stopped.py; then
+        echo -e "${GREEN}[OK]${NC} Detection complete"
+    else
+        echo -e "${RED}[ERROR]${NC} Detector failed"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${CYAN}[4/6]${NC} Detecting orphaned EBS volumes..."
     if python3 src/detectors/ebs_orphan.py; then
+        echo -e "${GREEN}[OK]${NC} Detection complete"
+    else
+        echo -e "${RED}[ERROR]${NC} Detector failed"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${CYAN}[5/6]${NC} Detecting unassociated Elastic IPs..."
+    if python3 src/detectors/eip_orphan.py; then
+        echo -e "${GREEN}[OK]${NC} Detection complete"
+    else
+        echo -e "${RED}[ERROR]${NC} Detector failed"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${CYAN}[6/6]${NC} Detecting old EBS snapshots..."
+    if python3 src/detectors/snapshot_orphan.py; then
         echo -e "${GREEN}[OK]${NC} Detection complete"
     else
         echo -e "${RED}[ERROR]${NC} Detector failed"
@@ -193,6 +242,26 @@ _collect() {
     echo ""
     echo -e "${GREEN}Done!${NC} Open ${BOLD}http://localhost:8888/recommendations${NC} to review."
     echo ""
+}
+
+# ---------------------------------------------------------------------------
+# ensure_collector  (called automatically on start)
+# ---------------------------------------------------------------------------
+_ensure_cron() {
+    # Already running?
+    if [ -f "$COLLECTOR_PID_FILE" ] && kill -0 "$(cat "$COLLECTOR_PID_FILE")" 2>/dev/null; then
+        return
+    fi
+
+    (
+        while true; do
+            "$SCRIPT_DIR/wasteless.sh" collect >> "$LOG_FILE" 2>&1
+            sleep 5
+        done
+    ) &
+    echo $! > "$COLLECTOR_PID_FILE"
+    disown $!
+    echo -e "  ${CYAN}Auto-collection started (every 5s)${NC}"
 }
 
 # ---------------------------------------------------------------------------
