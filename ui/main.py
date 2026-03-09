@@ -825,9 +825,9 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                 })
 
             elif action_request.action in ("approve", "execute"):
-                # Get instance info
+                # Get resource info
                 cursor.execute("""
-                    SELECT w.resource_id, r.recommendation_type
+                    SELECT w.resource_id, w.resource_type, r.recommendation_type, w.metadata
                     FROM recommendations r
                     JOIN waste_detected w ON r.waste_id = w.id
                     WHERE r.id = %s
@@ -835,39 +835,58 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                 row = cursor.fetchone()
 
                 if row:
-                    instance_id = row['resource_id']
-                    rec_type = row['recommendation_type']
-                    action_type = rec_type.replace('_instance', '')
-                    aws_success = True
-                    aws_error = None
+                    instance_id   = row['resource_id']
+                    resource_type = row['resource_type']
+                    rec_type      = row['recommendation_type']
+                    metadata      = row['metadata'] or {}
+                    action_type   = rec_type.replace('_instance', '').replace('_volume', '').replace('_snapshot', '')
+                    aws_success   = True
+                    aws_error     = None
 
                     # Execute real AWS action if NOT in dry-run mode
                     if not action_request.dry_run:
                         try:
                             import boto3
-                            # Try multiple regions to find the instance
                             regions = ['eu-west-1', 'eu-west-2', 'eu-west-3', 'us-east-1']
+                            # Use stored region if available
+                            stored_region = metadata.get('region')
+                            if stored_region:
+                                regions = [stored_region] + [r for r in regions if r != stored_region]
                             executed = False
 
                             for region in regions:
                                 try:
                                     ec2 = boto3.client('ec2', region_name=region)
 
-                                    # Check if instance exists in this region
-                                    response = ec2.describe_instances(
-                                        Filters=[{'Name': 'instance-id', 'Values': [instance_id]}]
-                                    )
-
-                                    if response['Reservations']:
-                                        # Instance found in this region
-                                        instance_state = response['Reservations'][0]['Instances'][0]['State']['Name']
-                                        print(f"Found instance {instance_id} in {region}, state: {instance_state}")
-
-                                        if instance_state in ['terminated', 'shutting-down']:
-                                            print(f"Instance {instance_id} already terminated/shutting-down")
+                                    if rec_type == 'delete_volume':
+                                        # Verify volume still exists and is available
+                                        vol_resp = ec2.describe_volumes(
+                                            Filters=[{'Name': 'volume-id', 'Values': [instance_id]}]
+                                        )
+                                        if not vol_resp['Volumes']:
+                                            continue  # Not in this region
+                                        vol_state = vol_resp['Volumes'][0]['State']
+                                        if vol_state != 'available':
+                                            aws_success = False
+                                            aws_error = f"Volume {instance_id} is '{vol_state}' — must be 'available' to delete"
                                             executed = True
                                             break
+                                        ec2.delete_volume(VolumeId=instance_id)
+                                        print(f"✅ Deleted volume {instance_id} in {region}")
+                                        executed = True
+                                        break
 
+                                    else:
+                                        # EC2 instance actions
+                                        response = ec2.describe_instances(
+                                            Filters=[{'Name': 'instance-id', 'Values': [instance_id]}]
+                                        )
+                                        if not response['Reservations']:
+                                            continue
+                                        instance_state = response['Reservations'][0]['Instances'][0]['State']['Name']
+                                        if instance_state in ['terminated', 'shutting-down']:
+                                            executed = True
+                                            break
                                         if rec_type == 'stop_instance':
                                             ec2.stop_instances(InstanceIds=[instance_id])
                                             print(f"✅ Stopped instance {instance_id} in {region}")
@@ -876,13 +895,14 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                                             print(f"✅ Terminated instance {instance_id} in {region}")
                                         executed = True
                                         break
+
                                 except Exception as e:
                                     print(f"Region {region} error: {e}")
                                     continue
 
                             if not executed:
                                 aws_success = False
-                                aws_error = f"Instance {instance_id} not found in any region"
+                                aws_error = f"Resource {instance_id} not found in any region"
 
                         except ImportError:
                             aws_success = False
@@ -901,7 +921,7 @@ async def api_execute_actions(action_request: ActionRequest, conn=Depends(get_db
                     """, (
                         instance_id,
                         rec_id,
-                        'ec2_instance',
+                        resource_type,
                         action_type,
                         action_status,
                         action_request.dry_run,

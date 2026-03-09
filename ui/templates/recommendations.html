@@ -42,7 +42,7 @@
         </button>
         <button id="tab-btn-ebs" onclick="switchTab('ebs')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">EBS Volumes <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ ebs_recs|length }}</span></span>
-            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-500); margin-top: 2px;">MANUAL</span>
+            <span style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; color: var(--gray-600); opacity: 0.7; margin-top: 2px;">AUTOMATED</span>
         </button>
         <button id="tab-btn-eip" onclick="switchTab('eip')" style="display:flex; flex-direction:column; align-items:flex-start; padding: 0.5rem 1.25rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">
             <span style="font-size: 0.9rem; font-weight: 600; color: var(--gray-600);">Elastic IPs <span style="background: var(--gray-400); color: white; border-radius: 12px; padding: 0.1rem 0.5rem; font-size: 0.75rem; margin-left: 0.25rem; min-width: 1.5rem; display: inline-block; text-align: center;">{{ eip_recs|length }}</span></span>
@@ -55,11 +55,11 @@
     </div>
 
     <form id="actionsForm">
-        <!-- Action buttons — AUTOMATED (EC2 only) -->
+        <!-- Action buttons — AUTOMATED (EC2 + EBS) -->
         <div id="actions-automated" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
             <span id="selectedCount" style="font-size: 0.85rem; color: var(--gray-600);">0 selected</span>
             <div style="display: flex; gap: 0.5rem;">
-                <button type="button" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem;">
+                <button type="button" id="approveBtn" onclick="executeAction('approve', {{ 'true' if get_dry_run() else 'false' }})" class="btn btn-success" style="padding: 0.4rem 0.75rem;">
                     &#9654; Approve Selected
                 </button>
                 <button type="button" onclick="executeAction('reject')" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">
@@ -418,9 +418,17 @@
             }
         });
         // Show automated vs manual action bar
-        const isAutomated = tab === 'ec2';
+        const isAutomated = tab === 'ec2' || tab === 'ebs';
         document.getElementById('actions-automated').style.display = isAutomated ? 'flex' : 'none';
         document.getElementById('actions-manual').style.display    = isAutomated ? 'none' : 'flex';
+
+        // Update approve button label
+        const approveBtn = document.getElementById('approveBtn');
+        if (approveBtn) {
+            approveBtn.innerHTML = tab === 'ebs'
+                ? '&#128465; Delete Selected'
+                : '&#9654; Approve Selected';
+        }
 
         updateSelectedCount();
     }
@@ -441,7 +449,7 @@
 
     function updateSelectedCount() {
         const count = document.querySelectorAll('.rec-checkbox-' + currentTab + ':checked').length;
-        if (currentTab === 'ec2') {
+        if (currentTab === 'ec2' || currentTab === 'ebs') {
             document.getElementById('selectedCount').textContent = count + ' selected';
             const approveBtn = document.querySelector('#actions-automated .btn-success');
             const rejectBtn  = document.querySelector('#actions-automated .btn-outline');
