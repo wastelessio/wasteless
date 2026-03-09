@@ -325,6 +325,11 @@ class EC2IdleDetector:
                         confidence_score, metadata
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (resource_id, resource_type) DO UPDATE SET
+                        detection_date    = EXCLUDED.detection_date,
+                        monthly_waste_eur = EXCLUDED.monthly_waste_eur,
+                        confidence_score  = EXCLUDED.confidence_score,
+                        metadata          = EXCLUDED.metadata
                     RETURNING id;
                 """, (
                     today,
@@ -440,7 +445,8 @@ class EC2IdleDetector:
                         waste_id, recommendation_type, action_required,
                         estimated_monthly_savings_eur, status
                     )
-                    VALUES (%s, %s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (waste_id) DO NOTHING;
                 """, (
                     waste_id,
                     recommendation_type,
