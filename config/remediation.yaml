@@ -1,6 +1,6 @@
 auto_remediation:
   enabled: false
-  dry_run_days: 7
+  dry_run_days: 0
 protection:
   min_instance_age_days: 30
   min_idle_days: 14
