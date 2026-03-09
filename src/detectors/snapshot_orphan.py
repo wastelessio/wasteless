@@ -40,19 +40,40 @@ def _snapshot_monthly_cost(size_gb: int) -> float:
     return round(size_gb * SNAPSHOT_PRICE_EUR_PER_GIB, 2)
 
 
+def _fetch_ami_snapshot_ids(ec2_client) -> set:
+    """Return snapshot IDs that back a registered AMI — must not be deleted."""
+    ami_snap_ids = set()
+    for image in ec2_client.describe_images(Owners=['self']).get('Images', []):
+        for mapping in image.get('BlockDeviceMappings', []):
+            snap_id = mapping.get('Ebs', {}).get('SnapshotId')
+            if snap_id:
+                ami_snap_ids.add(snap_id)
+    return ami_snap_ids
+
+
 def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
     try:
         import boto3
         ec2 = boto3.client('ec2', region_name=region)
         now = datetime.now(timezone.utc)
+
+        # Exclude snapshots still backing a registered AMI
+        ami_snap_ids = _fetch_ami_snapshot_ids(ec2)
+
         result = []
+        skipped = 0
 
         for snap in ec2.describe_snapshots(OwnerIds=['self']).get('Snapshots', []):
+            snap_id = snap['SnapshotId']
+
+            if snap_id in ami_snap_ids:
+                skipped += 1
+                continue  # Still backing a registered AMI — skip
+
             start_time = snap.get('StartTime')
             if not start_time:
                 continue
 
-            # Ensure timezone-aware comparison
             if start_time.tzinfo is None:
                 start_time = start_time.replace(tzinfo=timezone.utc)
 
@@ -62,7 +83,7 @@ def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
 
             size_gb = snap.get('VolumeSize', 0)
             result.append({
-                'snapshot_id':  snap['SnapshotId'],
+                'snapshot_id':  snap_id,
                 'description':  snap.get('Description') or '',
                 'volume_id':    snap.get('VolumeId') or '',
                 'size_gb':      size_gb,
@@ -74,11 +95,12 @@ def _fetch_old_snapshots(region: str) -> List[Dict[str, Any]]:
                 'monthly_cost': _snapshot_monthly_cost(size_gb),
             })
 
-        logger.info(f"  {region}: {len(result)} old snapshot(s) (>{SNAPSHOT_AGE_DAYS}d)")
-        return result
+        logger.info(f"  {region}: {len(result)} old snapshot(s) (>{SNAPSHOT_AGE_DAYS}d), "
+                    f"{skipped} skipped (AMI-backed)")
+        return result, ami_snap_ids
     except Exception as e:
         logger.warning(f"  {region}: error — {e}")
-        return []
+        return [], set()
 
 
 class SnapshotOrphanDetector:
@@ -98,13 +120,15 @@ class SnapshotOrphanDetector:
             connect_timeout=10
         )
 
-    def detect(self) -> List[Dict[str, Any]]:
+    def detect(self) -> tuple:
         logger.info(f"Scanning for old EBS snapshots (>{SNAPSHOT_AGE_DAYS} days) across regions...")
         with ThreadPoolExecutor(max_workers=len(REGIONS)) as executor:
             results = list(executor.map(_fetch_old_snapshots, REGIONS))
-        snapshots = [s for region_list in results for s in region_list]
-        logger.info(f"Total old snapshots found: {len(snapshots)}")
-        return snapshots
+        snapshots = [s for snaps, _ in results for s in snaps]
+        all_ami_snap_ids = set().union(*[ids for _, ids in results])
+        logger.info(f"Total old snapshots found: {len(snapshots)} "
+                    f"({len(all_ami_snap_ids)} AMI-backed excluded)")
+        return snapshots, all_ami_snap_ids
 
     def save(self, snapshots: List[Dict[str, Any]]) -> List[int]:
         if not snapshots:
@@ -216,12 +240,43 @@ class SnapshotOrphanDetector:
         finally:
             cursor.close()
 
+    def mark_ami_backed_obsolete(self, ami_snap_ids: set) -> int:
+        """Mark pending recommendations obsolete for snapshots backing a registered AMI."""
+        if not ami_snap_ids:
+            return 0
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE recommendations r SET status = 'obsolete'
+                FROM waste_detected w
+                WHERE r.waste_id = w.id
+                  AND w.resource_type = 'ebs_snapshot'
+                  AND w.resource_id = ANY(%s)
+                  AND r.status = 'pending'
+            """, (list(ami_snap_ids),))
+            count = cursor.rowcount
+            self.conn.commit()
+            if count:
+                logger.info(f"Marked {count} AMI-backed snapshot recommendation(s) as obsolete")
+            return count
+        except Exception as e:
+            self.conn.rollback()
+            logger.warning(f"Failed to cleanup AMI-backed snapshots: {e}")
+            return 0
+        finally:
+            cursor.close()
+
     def run(self) -> None:
         print("\n" + "=" * 70)
         print(f"EBS SNAPSHOT DETECTION (>{SNAPSHOT_AGE_DAYS} DAYS OLD)")
         print("=" * 70 + "\n")
 
-        snapshots = self.detect()
+        snapshots, ami_snap_ids = self.detect()
+
+        # Clean up any previously-saved recs for AMI-backed snapshots
+        cleaned = self.mark_ami_backed_obsolete(ami_snap_ids)
+        if cleaned:
+            print(f"Cleaned up {cleaned} obsolete recommendation(s) (AMI-backed snapshots)\n")
 
         if not snapshots:
             print(f"No snapshots older than {SNAPSHOT_AGE_DAYS} days found.\n")
